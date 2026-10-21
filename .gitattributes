@@ -1,0 +1,2 @@
+# Store text with LF so diffs stay clean between Windows and the Linux CI runner.
+* text=auto eol=lf

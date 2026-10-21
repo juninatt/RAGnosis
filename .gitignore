@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Tool caches and reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Secrets and personal overrides (the shared .env is committed)
+.env.local
+
+# Downloaded articles and the vector store are rebuilt locally, never committed
+data/
+
+# IDE
+.idea/
+.vscode/
