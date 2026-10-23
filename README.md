@@ -10,7 +10,8 @@ everything locally keeps it free and private.
 
 The first dataset covers pirates and antiquity, with a focus on Europe.
 
-> **Status:** early development. Only project scaffolding exists so far.
+> **Status:** early development. Articles can be fetched; indexing and
+> answering come next.
 
 ## How it works
 
@@ -29,6 +30,34 @@ Requires [uv](https://docs.astral.sh/uv/), which also installs the right Python 
 uv sync
 uv run pytest
 ```
+
+## Usage
+
+### Fetch the articles
+
+```bash
+uv run python -m ragnosis ingest
+```
+
+`uv run ragnosis ingest` does the same, but Windows Smart App Control may block
+the unsigned `ragnosis.exe` launcher; `python -m` works everywhere.
+
+Downloads every title in the topics file (`RAGNOSIS_TOPICS_FILE`) from
+Wikipedia and stores each article as JSON in `data/articles/`. Reruns only
+fetch titles that are missing, so an interrupted run can simply be restarted.
+
+| Option | Effect |
+|---|---|
+| `--topics FILE` | Use another title list. |
+| `--refresh` | Fetch again even if already stored, to pick up newer revisions. |
+
+Titles that do not exist or are disambiguation pages are reported at the end;
+fix them in the topics file and rerun. Exit codes: `0` all fetched, `1` some
+titles failed, `2` bad configuration or usage.
+
+### Settings
+
+All settings are listed with their defaults in [`.env`](.env).
 
 ## Development
 

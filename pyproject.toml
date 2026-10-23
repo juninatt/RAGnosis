@@ -5,8 +5,12 @@ description = "A free, local RAG assistant grounded in Wikipedia and Wikidata."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "httpx>=0.27",
     "python-dotenv>=1.0",
 ]
+
+[project.scripts]
+ragnosis = "ragnosis.cli:main"
 
 [dependency-groups]
 dev = [

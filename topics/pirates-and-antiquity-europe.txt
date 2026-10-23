@@ -1,0 +1,80 @@
+# Wikipedia titles (English) for the first RAGnosis corpus: pirates and antiquity, focused on Europe.
+# One title per line. '#' starts a comment. Duplicates are ignored.
+
+# --- Piracy: concepts ---
+Piracy
+Golden Age of Piracy
+Privateer
+Letter of marque
+Buccaneer
+Jolly Roger
+Pirate code
+Republic of Pirates
+
+# --- Pirates of the Golden Age ---
+Blackbeard
+Anne Bonny
+Mary Read
+Calico Jack
+Bartholomew Roberts
+Henry Every
+William Kidd
+Stede Bonnet
+Charles Vane
+Samuel Bellamy
+Henry Morgan
+
+# --- European and Mediterranean piracy ---
+Barbary pirates
+Barbary slave trade
+Hayreddin Barbarossa
+Oruç Reis
+Klaus Störtebeker
+Victual Brothers
+Grace O'Malley
+Uskoks
+Knights Hospitaller
+Francis Drake
+
+# --- Piracy in antiquity ---
+Cilician pirates
+Sea Peoples
+Lex Gabinia
+Pompey
+Teuta
+Illyrian Wars
+
+# --- Ancient Greece ---
+Ancient Greece
+Minoan civilization
+Mycenaean Greece
+Classical Athens
+Sparta
+Greco-Persian Wars
+Battle of Marathon
+Battle of Thermopylae
+Battle of Salamis
+Peloponnesian War
+Alexander the Great
+Hellenistic period
+Trireme
+
+# --- Ancient Rome ---
+Ancient Rome
+Roman Republic
+Roman Empire
+Punic Wars
+Carthage
+Hannibal
+Julius Caesar
+Gallic Wars
+Vercingetorix
+Augustus
+Roman navy
+Roman Britain
+Fall of the Western Roman Empire
+
+# --- Other peoples of ancient Europe ---
+Etruscan civilization
+Celts
+Gaul

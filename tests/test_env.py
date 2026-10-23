@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -15,16 +14,6 @@ from ragnosis.env import LOCAL_ENV_FILE, SHARED_ENV_FILE, load_env
 VAR = "RAGNOSIS_TEST_SETTING"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SECRET_LIKE = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL", re.IGNORECASE)
-
-
-@pytest.fixture(autouse=True)
-def restore_environ() -> Iterator[None]:
-    """load_env writes to os.environ directly, so undo it after every test."""
-    saved = os.environ.copy()
-    os.environ.pop(VAR, None)
-    yield
-    os.environ.clear()
-    os.environ.update(saved)
 
 
 def write(directory: Path, name: str, content: str) -> Path:

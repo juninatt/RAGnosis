@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
 
 import pytest
 
@@ -12,17 +11,6 @@ from ragnosis.logging_config import (
     PACKAGE_LOGGER,
     setup_logging,
 )
-
-
-@pytest.fixture(autouse=True)
-def clean_package_logger(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Isolate each test from the environment and from earlier setup calls."""
-    monkeypatch.delenv(LOG_LEVEL_ENV_VAR, raising=False)
-    logger = logging.getLogger(PACKAGE_LOGGER)
-    yield
-    for handler in list(logger.handlers):
-        logger.removeHandler(handler)
-    logger.setLevel(logging.NOTSET)
 
 
 def test_defaults_to_info_without_argument_or_env() -> None:
