@@ -2,8 +2,9 @@
 
 This is the only place that loads env files and configures logging; everything
 below it receives settings as arguments. Logs go to stderr and results (search
-hits) to stdout, so results can be piped without log noise. Exit codes: 0
-success, 1 some work failed, 2 bad usage or configuration.
+hits, answers) to stdout, so results can be piped without log noise. Exit
+codes: 0 success, 1 some work failed, 2 bad usage or configuration (including
+a missing index, Ollama not running or the model not downloaded).
 """
 
 from __future__ import annotations
@@ -14,11 +15,13 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from ragnosis.answer import DEFAULT_K, Answer, ask
 from ragnosis.article_store import ArticleStore
 from ragnosis.embeddings import SentenceTransformerEmbedder
 from ragnosis.env import load_env
 from ragnosis.indexing import update_index
 from ragnosis.ingest import ingest
+from ragnosis.llm import LLMError, LLMUnavailableError, ModelNotFoundError, OllamaClient
 from ragnosis.logging_config import setup_logging
 from ragnosis.settings import Settings
 from ragnosis.topics import load_titles
@@ -70,6 +73,15 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument(
         "-k", type=positive_int, default=5, help="number of passages (default: 5)"
     )
+
+    ask_parser = commands.add_parser("ask", help="answer a question from the indexed articles")
+    ask_parser.add_argument("question", help="the question, in any language")
+    ask_parser.add_argument(
+        "-k",
+        type=positive_int,
+        default=DEFAULT_K,
+        help=f"number of passages the model reads (default: {DEFAULT_K})",
+    )
     return parser
 
 
@@ -93,7 +105,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_ingest(settings, topics=args.topics, refresh=args.refresh)
     if args.command == "index":
         return run_index(settings, topics=args.topics, rebuild=args.rebuild)
-    return run_search(settings, query=args.query, k=args.k)
+    if args.command == "search":
+        return run_search(settings, query=args.query, k=args.k)
+    return run_ask(settings, question=args.question, k=args.k)
 
 
 def run_ingest(settings: Settings, *, topics: Path | None, refresh: bool) -> int:
@@ -160,6 +174,51 @@ def run_search(settings: Settings, *, query: str, k: int) -> int:
     results = store.search(embedder.embed_query(query), k)
     sys.stdout.write(format_results(results))
     return EXIT_OK
+
+
+def run_ask(settings: Settings, *, question: str, k: int) -> int:
+    if not question.strip():
+        logger.error("The question must not be blank")
+        return EXIT_USAGE
+    if not VectorStore.exists(settings.index_dir):
+        logger.error("No index in %s; run index first", settings.index_dir)
+        return EXIT_USAGE
+    store = _load_store(settings)
+    if store is None:
+        return EXIT_USAGE
+
+    embedder = SentenceTransformerEmbedder(settings.embedding_model)
+    try:
+        with OllamaClient(settings.llm_model, settings.ollama_url) as llm:
+            answer = ask(question, store=store, embedder=embedder, llm=llm, k=k, on_text=_show)
+    except (LLMUnavailableError, ModelNotFoundError) as exc:
+        logger.error("%s", exc)
+        return EXIT_USAGE
+    except LLMError as exc:
+        _show("\n")
+        logger.error("%s", exc)
+        return EXIT_FAILURES
+
+    _show("\n\n" + format_sources(answer))
+    return EXIT_OK
+
+
+def format_sources(answer: Answer) -> str:
+    """The cited passages with their numbers, so each [n] in the answer can be checked."""
+    if not answer.cited:
+        return "No sources cited.\n"
+    lines = ["Sources:"]
+    for number, result in answer.cited:
+        chunk = result.chunk
+        lines.append(f"[{number}] {chunk.article_title} > {chunk.section}")
+        lines.append(f"    {chunk.url}")
+    return "\n".join(lines) + "\n"
+
+
+def _show(text: str) -> None:
+    """Write to stdout at once; answers arrive slowly and should appear as written."""
+    sys.stdout.write(text)
+    sys.stdout.flush()
 
 
 def format_results(results: Sequence[SearchResult]) -> str:

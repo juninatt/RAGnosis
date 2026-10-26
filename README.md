@@ -10,8 +10,8 @@ everything locally keeps it free and private.
 
 The first dataset covers pirates and antiquity, with a focus on Europe.
 
-> **Status:** early development. Articles can be fetched, indexed and searched;
-> generated answers come next.
+> **Status:** early development. Questions are answered from the indexed
+> articles on the command line; a simple UI comes next.
 
 ## How it works
 
@@ -76,11 +76,32 @@ On Windows, the PyTorch library behind the model needs a current
 ### Search
 
 ```bash
-uv run python -m ragnosis search "Hur dog Svartskägg?"
+uv run python -m ragnosis search "Vem var Hannibal?"
 ```
 
 Prints the passages closest to the question, best first, with their source.
 Questions can be in any language the model knows. `-k N` sets how many.
+
+### Ask
+
+```bash
+uv run python -m ragnosis ask "Who led the Carthaginian army across the Alps?"
+```
+
+Retrieves the best passages and has a local language model answer from them,
+citing them as `[1]`, `[2]`; the cited sources are listed after the answer. The
+answer appears as it is written; on a laptop CPU a full answer takes about a
+minute. `-k N` sets how many passages the model reads (default 5).
+
+Needs [Ollama](https://ollama.com) running and the model in
+`RAGNOSIS_LLM_MODEL` downloaded once:
+
+```bash
+ollama pull qwen3.5:4b
+```
+
+Exit code `2` means something to set up: no index, Ollama not running or the
+model not downloaded; the message says which.
 
 ### Settings
 

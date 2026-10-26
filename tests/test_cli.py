@@ -1,18 +1,21 @@
-"""Tests for the command line, with Wikipedia and the embedding model replaced by fakes."""
+"""Tests for the command line, with Wikipedia and the models replaced by fakes."""
 
 from __future__ import annotations
 
 import io
 import runpy
 import sys
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from types import TracebackType
 
 import pytest
-from factories import FakeEmbedder, make_article, make_chunk
+from factories import FakeChatModel, FakeEmbedder, make_article, make_chunk
 
 from ragnosis import cli
+from ragnosis.answer import Answer
 from ragnosis.article_store import ArticleStore
+from ragnosis.llm import LLMError, LLMUnavailableError, Message, ModelNotFoundError
 from ragnosis.vector_store import MANIFEST_FILE, SearchResult, VectorStore
 from ragnosis.wikipedia import Article, ArticleNotFoundError
 
@@ -318,3 +321,146 @@ def test_format_results_shortens_long_passages() -> None:
     preview = output.splitlines()[2].strip()
     assert preview.endswith("…")
     assert len(preview) <= cli.PREVIEW_CHARS + 1
+
+
+# --- ask ---
+
+
+class FakeOllama(FakeChatModel):
+    """Stands in for OllamaClient: replies with ``reply``, or raises ``error``."""
+
+    reply: tuple[str, ...] = ("Anne Bonny ", "was an Irish pirate [1].")
+    error: Exception | None = None
+    created: list[tuple[str, str]] = []
+
+    def __init__(self, model: str, base_url: str) -> None:
+        super().__init__(*self.reply)
+        self.created.append((model, base_url))
+
+    def __enter__(self) -> FakeOllama:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        pass
+
+    def stream_chat(
+        self, messages: Sequence[Message], *, temperature: float = 0.2
+    ) -> Iterator[str]:
+        yield from super().stream_chat(messages, temperature=temperature)
+        if self.error:
+            raise self.error
+
+
+@pytest.fixture
+def indexed(project_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A project with both articles ingested and indexed, and a fake Ollama."""
+    topics = ingest_both(project_dir)
+    assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_OK
+    monkeypatch.setattr(cli, "OllamaClient", FakeOllama)
+    monkeypatch.setattr(FakeOllama, "created", [])
+    return project_dir
+
+
+def test_ask_streams_answer_then_cited_sources(
+    indexed: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+
+    assert cli.main(["ask", "Irish pirate Calico Jack", "-k", "1"]) == cli.EXIT_OK
+
+    assert capsys.readouterr().out == (
+        "Anne Bonny was an Irish pirate [1].\n\n"
+        "Sources:\n"
+        "[1] Anne Bonny > Introduction\n"
+        "    https://en.wikipedia.org/wiki/Anne_Bonny\n"
+    )
+
+
+def test_ask_uses_model_and_address_from_settings(indexed: Path) -> None:
+    write(
+        indexed / ".env",
+        "RAGNOSIS_LLM_MODEL=gemma4:e4b\nRAGNOSIS_OLLAMA_URL=http://gpu-box:11434\n",
+    )
+    cli.main(["ask", "pirates"])
+    assert FakeOllama.created == [("gemma4:e4b", "http://gpu-box:11434")]
+
+
+def test_ask_says_when_nothing_is_cited(
+    indexed: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(FakeOllama, "reply", ("I cannot answer from the sources.",))
+    capsys.readouterr()
+
+    assert cli.main(["ask", "Capital of Japan?"]) == cli.EXIT_OK
+    assert capsys.readouterr().out.endswith("\n\nNo sources cited.\n")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        LLMUnavailableError("Ollama is not reachable; start Ollama"),
+        ModelNotFoundError("run: ollama pull qwen3.5:4b"),
+    ],
+    ids=["ollama-not-running", "model-missing"],
+)
+def test_ask_setup_problems_exit_with_usage_code(
+    indexed: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    error: Exception,
+) -> None:
+    monkeypatch.setattr(FakeOllama, "reply", ())
+    monkeypatch.setattr(FakeOllama, "error", error)
+
+    assert cli.main(["ask", "pirates"]) == cli.EXIT_USAGE
+    assert str(error) in caplog.text
+
+
+def test_ask_failure_mid_answer_exits_with_failure_code(
+    indexed: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(FakeOllama, "reply", ("Anne Bonny was",))
+    monkeypatch.setattr(FakeOllama, "error", LLMError("Lost connection to Ollama"))
+    capsys.readouterr()
+
+    assert cli.main(["ask", "pirates"]) == cli.EXIT_FAILURES
+    assert capsys.readouterr().out == "Anne Bonny was\n"
+    assert "Lost connection to Ollama" in caplog.text
+
+
+def test_ask_without_index_exits_with_usage_code(caplog: pytest.LogCaptureFixture) -> None:
+    assert cli.main(["ask", "pirates"]) == cli.EXIT_USAGE
+    assert "run index first" in caplog.text
+
+
+def test_ask_refuses_index_built_with_another_model(indexed: Path) -> None:
+    write(indexed / ".env", "RAGNOSIS_EMBEDDING_MODEL=other/model\n")
+    assert cli.main(["ask", "pirates"]) == cli.EXIT_USAGE
+    assert FakeOllama.created == []
+
+
+@pytest.mark.parametrize("question", ["", "   "])
+def test_ask_rejects_blank_question(question: str, caplog: pytest.LogCaptureFixture) -> None:
+    assert cli.main(["ask", question]) == cli.EXIT_USAGE
+    assert "must not be blank" in caplog.text
+
+
+def test_format_sources_lists_cited_passages_in_citation_order() -> None:
+    passages = [
+        SearchResult(make_chunk(article_title="Blackbeard", section="Death"), 0.9),
+        SearchResult(
+            make_chunk(article_title="Anne Bonny", url="https://en.wikipedia.org/wiki/Anne_Bonny"),
+            0.8,
+        ),
+    ]
+    answer = Answer("q", "Bonny [2] and Teach [1].", passages)
+    assert cli.format_sources(answer) == (
+        "Sources:\n"
+        "[2] Anne Bonny > Introduction\n"
+        "    https://en.wikipedia.org/wiki/Anne_Bonny\n"
+        "[1] Blackbeard > Death\n"
+        "    https://en.wikipedia.org/wiki/Blackbeard\n"
+    )

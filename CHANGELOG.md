@@ -5,6 +5,13 @@ Notable changes per release. The format follows
 [Semantic Versioning](https://semver.org/): until 1.0.0, commands, settings and
 the index format may still change between minor versions.
 
+## [Unreleased]
+
+### Added
+
+- `ask` command: answers from the best passages with a local model through
+  Ollama (`qwen3.5:4b` by default), streamed as written, with cited sources.
+
 ## [0.2.0] - 2026-10-26
 
 Retrieval: questions find the passages that answer them.
