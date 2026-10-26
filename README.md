@@ -120,6 +120,11 @@ All settings are listed with their defaults in [`.env`](.env).
 
 CI runs all of these on every push and pull request.
 
+On Windows with Smart App Control on, the `pytest.exe` and `mypy.exe`
+launchers that uv creates can be blocked because they are unsigned. Running
+the tools as modules avoids that: `uv run python -m pytest` and
+`uv run python -m mypy` accept the same options.
+
 ### Conventions
 
 - **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/)
