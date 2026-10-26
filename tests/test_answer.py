@@ -9,6 +9,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ragnosis.answer import (
+    DEFAULT_K,
     NO_PASSAGES_TEXT,
     SAME_LANGUAGE_RULE,
     SWEDISH_RULE,
@@ -177,6 +178,21 @@ def test_answers_from_the_best_matching_passages(
     (prompt,) = llm.prompts
     assert "[1] Blackbeard > Death" in prompt[1].content
     assert prompt[1].content.endswith("Question: Where was Teach killed?")
+
+
+def test_reads_four_passages_by_default(embedder: FakeEmbedder) -> None:
+    store = VectorStore(embedder.model_name, embedder.dimension)
+    chunks = [make_chunk(chunk_id=f"9-{i}", page_id=9, position=i) for i in range(6)]
+    store.replace_article(9, 1, chunks, np.array([embedder.vector(c.text) for c in chunks]))
+    llm = FakeChatModel()
+
+    answer = ask("Teach?", store=store, embedder=embedder, llm=llm)
+
+    assert DEFAULT_K == 4
+    assert len(answer.passages) == 4
+    prompt = llm.prompts[0][1].content
+    assert "\n[4] " in prompt
+    assert "\n[5] " not in prompt
 
 
 def test_streams_pieces_to_the_callback_in_order(

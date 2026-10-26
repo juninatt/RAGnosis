@@ -14,7 +14,7 @@ from factories import make_chunk
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
-from ragnosis.answer import Answer
+from ragnosis.answer import DEFAULT_K, Answer
 from ragnosis.llm import LLMError, LLMUnavailableError, ModelNotFoundError
 from ragnosis.vector_store import SearchResult
 from ragnosis.web import MAX_BODY_BYTES, MAX_K, MAX_QUESTION_CHARS, AnswerFn, create_app
@@ -115,7 +115,7 @@ def test_answer_without_citations_has_empty_sources() -> None:
 def test_passes_trimmed_question_and_default_k() -> None:
     recorder = Recorder()
     ask(client_for(recorder), {"question": "  Vem var Anne Bonny?  "})
-    assert recorder.calls == [("Vem var Anne Bonny?", 5)]
+    assert recorder.calls == [("Vem var Anne Bonny?", DEFAULT_K)]
 
 
 def test_passes_k() -> None:

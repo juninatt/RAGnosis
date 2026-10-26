@@ -20,7 +20,10 @@ from ragnosis.vector_store import SearchResult, VectorStore
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_K = 5
+# Reading the passages is most of the wait before the first word on a CPU
+# (about 50 tokens a second). Four found a relevant passage for as many known
+# questions as five did, with a fifth less to read; three missed one.
+DEFAULT_K = 4
 
 SYSTEM_PROMPT = (
     "You answer questions using only the numbered sources given. "

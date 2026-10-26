@@ -91,7 +91,7 @@ uv run python -m ragnosis ask "Who led the Carthaginian army across the Alps?"
 Retrieves the best passages and has a local language model answer from them,
 citing them as `[1]`, `[2]`; the cited sources are listed after the answer. The
 answer appears as it is written; on a laptop CPU a full answer takes about a
-minute. `-k N` sets how many passages the model reads (default 5).
+minute. `-k N` sets how many passages the model reads (default 4).
 
 Needs [Ollama](https://ollama.com) running and the model in
 `RAGNOSIS_LLM_MODEL` downloaded once:
