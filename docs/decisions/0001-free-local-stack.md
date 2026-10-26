@@ -1,6 +1,7 @@
 # 0001: Free, local stack
 
-**Status:** accepted
+**Status:** accepted. The vector store choice is replaced by
+[0005](0005-embeddings-and-vector-store.md).
 
 ## Context
 
