@@ -5,12 +5,28 @@ Notable changes per release. The format follows
 [Semantic Versioning](https://semver.org/): until 1.0.0, commands, settings and
 the index format may still change between minor versions.
 
-## [Unreleased]
+## [0.4.0] - 2026-10-26
+
+Web UI: ask in the browser, with answers that start sooner.
 
 ### Added
 
 - `serve` command: a local web UI where answers stream in and cited sources
   link to Wikipedia; localhost only, one question at a time.
+- The web UI shows how long each answer took, in total and to the first words.
+
+### Changed
+
+- The language model stays loaded for 30 minutes after an answer
+  (`RAGNOSIS_LLM_KEEP_ALIVE`) and is loaded when `serve` starts, so answers no
+  longer wait for it.
+- The model reads four passages instead of five, which shortens the wait
+  before the first words without finding fewer relevant articles.
+
+### Fixed
+
+- Swedish questions are answered in Swedish; some were answered in Norwegian
+  or English.
 
 ## [0.3.0] - 2026-10-26
 
@@ -52,5 +68,6 @@ First working pipeline step: articles from Wikipedia.
   (pirates and antiquity in Europe) as plain text.
 - Settings in env files, central logging, and CI on Linux and Windows.
 
+[0.4.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.4.0
 [0.3.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.3.0
 [0.2.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.2.0
