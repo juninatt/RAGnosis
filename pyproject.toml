@@ -21,9 +21,11 @@ dev = [
     "ruff>=0.6",
 ]
 
+# uv's own backend builds without starting Python, which Windows Smart App Control
+# can block when it runs from a temporary build folder.
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

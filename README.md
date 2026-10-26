@@ -31,6 +31,10 @@ uv sync
 uv run pytest
 ```
 
+With Windows Smart App Control on, uv's own Python builds may be blocked
+because they are unsigned. Installing Python 3.12 from python.org and setting
+`python-preference = "system"` in your user `uv.toml` avoids that.
+
 ## Usage
 
 ### Fetch the articles
