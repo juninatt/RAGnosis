@@ -53,6 +53,11 @@ class Settings:
         """Folder for fetched articles, kept apart from later derived data."""
         return self.data_dir / "articles"
 
+    @property
+    def index_dir(self) -> Path:
+        """Folder for the vector index, which can always be rebuilt from the articles."""
+        return self.data_dir / "index"
+
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> Settings:
         """Build settings from environment variables; empty values mean "use the default"."""

@@ -56,6 +56,10 @@ def test_blank_embedding_model_raises() -> None:
         Settings.from_env({EMBEDDING_MODEL_VAR: "   "})
 
 
+def test_index_dir_is_inside_data_dir() -> None:
+    assert Settings(data_dir=Path("store")).index_dir == Path("store/index")
+
+
 def test_reads_os_environ_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(WIKI_LANGUAGE_VAR, "de")
     assert Settings.from_env().wiki_language == "de"
