@@ -16,10 +16,12 @@ from pathlib import Path
 DATA_DIR_VAR = "RAGNOSIS_DATA_DIR"
 TOPICS_FILE_VAR = "RAGNOSIS_TOPICS_FILE"
 WIKI_LANGUAGE_VAR = "RAGNOSIS_WIKI_LANGUAGE"
+EMBEDDING_MODEL_VAR = "RAGNOSIS_EMBEDDING_MODEL"
 
 DEFAULT_DATA_DIR = Path("data")
 DEFAULT_TOPICS_FILE = Path("topics/pirates-and-antiquity-europe.txt")
 DEFAULT_WIKI_LANGUAGE = "en"
+DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 
 # The language code becomes part of the API host name, so only accept what real
 # Wikipedia codes look like ("en", "sv", "zh-yue") and nothing that could change the URL.
@@ -33,15 +35,18 @@ def is_valid_language(code: str) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    """Where data lives and which Wikipedia to read from."""
+    """Where data lives, which Wikipedia to read from and which model embeds text."""
 
     data_dir: Path = DEFAULT_DATA_DIR
     topics_file: Path = DEFAULT_TOPICS_FILE
     wiki_language: str = DEFAULT_WIKI_LANGUAGE
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
 
     def __post_init__(self) -> None:
         if not is_valid_language(self.wiki_language):
             raise ValueError(f"Invalid Wikipedia language code: {self.wiki_language!r}")
+        if not self.embedding_model.strip():
+            raise ValueError("Embedding model name must not be blank")
 
     @property
     def articles_dir(self) -> Path:
@@ -56,4 +61,5 @@ class Settings:
             data_dir=Path(env.get(DATA_DIR_VAR) or DEFAULT_DATA_DIR),
             topics_file=Path(env.get(TOPICS_FILE_VAR) or DEFAULT_TOPICS_FILE),
             wiki_language=env.get(WIKI_LANGUAGE_VAR) or DEFAULT_WIKI_LANGUAGE,
+            embedding_model=env.get(EMBEDDING_MODEL_VAR) or DEFAULT_EMBEDDING_MODEL,
         )
