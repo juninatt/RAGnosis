@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import re
 import zlib
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 import numpy as np
 
 from ragnosis.chunking import Chunk
 from ragnosis.embeddings import Vectors
+from ragnosis.llm import Message
 from ragnosis.wikipedia import Article
 
 
@@ -86,3 +87,17 @@ class FakeEmbedder:
             vector[zlib.crc32(word.encode()) % self.dimension] += 1.0
         norm = float(np.linalg.norm(vector))
         return vector / norm if norm else vector
+
+
+class FakeChatModel:
+    """Replies with fixed pieces of text and records the prompts it was sent."""
+
+    def __init__(self, *pieces: str) -> None:
+        self.pieces = list(pieces) or ["Blackbeard was killed in 1718 [1]."]
+        self.prompts: list[list[Message]] = []
+
+    def stream_chat(
+        self, messages: Sequence[Message], *, temperature: float = 0.2
+    ) -> Iterator[str]:
+        self.prompts.append(list(messages))
+        yield from self.pieces
