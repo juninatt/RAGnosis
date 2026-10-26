@@ -10,13 +10,14 @@ everything locally keeps it free and private.
 
 The first dataset covers pirates and antiquity, with a focus on Europe.
 
-> **Status:** early development. Articles can be fetched; indexing and
-> answering come next.
+> **Status:** early development. Articles can be fetched, indexed and searched;
+> generated answers come next.
 
 ## How it works
 
-1. **Ingest:** fetch articles and split them into passages.
-2. **Index:** embed each passage and store it in a local vector database.
+1. **Ingest:** fetch articles from Wikipedia and store them locally.
+2. **Index:** split articles into passages, embed each passage and store the
+   vectors in a local index.
 3. **Ask:** embed the question, retrieve the closest passages and let the
    language model answer from them.
 
@@ -58,6 +59,28 @@ fetch titles that are missing, so an interrupted run can simply be restarted.
 Titles that do not exist or are disambiguation pages are reported at the end;
 fix them in the topics file and rerun. Exit codes: `0` all fetched, `1` some
 titles failed, `2` bad configuration or usage.
+
+### Build the search index
+
+```bash
+uv run python -m ragnosis index
+```
+
+Splits the downloaded articles into passages and embeds them with the model in
+`RAGNOSIS_EMBEDDING_MODEL` (downloaded on first use, about 0.5 GB). Reruns only
+embed articles that changed. `--rebuild` starts over, which is required after
+changing the model. Exit code `1` means some titles have not been downloaded.
+On Windows, the PyTorch library behind the model needs a current
+[Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist).
+
+### Search
+
+```bash
+uv run python -m ragnosis search "Hur dog Svartskägg?"
+```
+
+Prints the passages closest to the question, best first, with their source.
+Questions can be in any language the model knows. `-k N` sets how many.
 
 ### Settings
 

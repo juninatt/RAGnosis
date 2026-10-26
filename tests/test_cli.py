@@ -1,17 +1,19 @@
-"""Tests for the command line, with the Wikipedia client replaced by a fake."""
+"""Tests for the command line, with Wikipedia and the embedding model replaced by fakes."""
 
 from __future__ import annotations
 
+import io
 import runpy
 import sys
 from pathlib import Path
 from types import TracebackType
 
 import pytest
-from factories import make_article
+from factories import FakeEmbedder, make_article, make_chunk
 
 from ragnosis import cli
 from ragnosis.article_store import ArticleStore
+from ragnosis.vector_store import MANIFEST_FILE, SearchResult, VectorStore
 from ragnosis.wikipedia import Article, ArticleNotFoundError
 
 
@@ -43,15 +45,21 @@ class FakeWikipediaClient:
 
 @pytest.fixture(autouse=True)
 def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Run each test in an empty project folder with a fake Wikipedia."""
+    """Run each test in an empty project folder with a fake Wikipedia and embedder."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "WikipediaClient", FakeWikipediaClient)
+    monkeypatch.setattr(cli, "SentenceTransformerEmbedder", lambda name: FakeEmbedder(name))
     monkeypatch.setattr(
         FakeWikipediaClient,
         "articles",
         {
             "Blackbeard": make_article(title="Blackbeard", page_id=1),
-            "Anne Bonny": make_article(title="Anne Bonny", page_id=2),
+            "Anne Bonny": make_article(
+                title="Anne Bonny",
+                page_id=2,
+                url="https://en.wikipedia.org/wiki/Anne_Bonny",
+                text="Anne Bonny was an Irish pirate who sailed with Calico Jack.",
+            ),
         },
     )
     monkeypatch.setattr(FakeWikipediaClient, "languages", [])
@@ -171,3 +179,142 @@ def test_logs_go_to_stderr_not_stdout(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "Fetched 'Blackbeard'" in captured.err
+
+
+# --- index ---
+
+
+def ingest_both(project_dir: Path) -> Path:
+    topics = write(project_dir / "topics.txt", "Blackbeard\nAnne Bonny\n")
+    assert cli.main(["ingest", "--topics", str(topics)]) == cli.EXIT_OK
+    return topics
+
+
+def test_index_builds_index_from_ingested_articles(project_dir: Path) -> None:
+    topics = ingest_both(project_dir)
+
+    assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_OK
+
+    store = VectorStore.load(project_dir / "data" / "index")
+    assert store.page_ids == {1, 2}
+    assert store.embedding_model == "intfloat/multilingual-e5-small"
+
+
+def test_second_index_run_finds_nothing_to_do(
+    project_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    topics = ingest_both(project_dir)
+    cli.main(["index", "--topics", str(topics)])
+    caplog.clear()
+
+    assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_OK
+    assert "0 indexed (0 chunks), 2 unchanged" in caplog.text
+
+
+def test_index_reports_titles_not_yet_ingested(
+    project_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ingest_both(project_dir)
+    topics = write(project_dir / "more.txt", "Blackbeard\nHannibal\n")
+
+    assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_FAILURES
+    assert "Missing: 'Hannibal' is not downloaded" in caplog.text
+
+
+def test_index_refuses_index_built_with_another_model(
+    project_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    topics = ingest_both(project_dir)
+    cli.main(["index", "--topics", str(topics)])
+    write(project_dir / ".env", "RAGNOSIS_EMBEDDING_MODEL=other/model\n")
+
+    assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_USAGE
+    assert "run index --rebuild" in caplog.text
+
+
+def test_rebuild_replaces_index_built_with_another_model(project_dir: Path) -> None:
+    topics = ingest_both(project_dir)
+    cli.main(["index", "--topics", str(topics)])
+    write(project_dir / ".env", "RAGNOSIS_EMBEDDING_MODEL=other/model\n")
+
+    assert cli.main(["index", "--topics", str(topics), "--rebuild"]) == cli.EXIT_OK
+    assert VectorStore.load(project_dir / "data" / "index").embedding_model == "other/model"
+
+
+def test_index_refuses_corrupt_index(project_dir: Path, caplog: pytest.LogCaptureFixture) -> None:
+    topics = ingest_both(project_dir)
+    cli.main(["index", "--topics", str(topics)])
+    write(project_dir / "data" / "index" / MANIFEST_FILE, "{broken")
+
+    assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_USAGE
+    assert "run index --rebuild" in caplog.text
+
+
+def test_index_with_missing_topics_file_exits_with_usage_code() -> None:
+    assert cli.main(["index", "--topics", "missing.txt"]) == cli.EXIT_USAGE
+
+
+# --- search ---
+
+
+def test_search_prints_best_matches_to_stdout(
+    project_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    topics = ingest_both(project_dir)
+    cli.main(["index", "--topics", str(topics)])
+    capsys.readouterr()
+
+    assert cli.main(["search", "Irish pirate Calico Jack", "-k", "1"]) == cli.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert out.startswith("1. [")
+    assert "Anne Bonny > Introduction" in out
+    assert "https://en.wikipedia.org/wiki/Anne_Bonny" in out
+    assert "2. [" not in out
+
+
+def test_search_without_index_exits_with_usage_code(caplog: pytest.LogCaptureFixture) -> None:
+    assert cli.main(["search", "pirates"]) == cli.EXIT_USAGE
+    assert "run index first" in caplog.text
+
+
+def test_search_refuses_index_built_with_another_model(project_dir: Path) -> None:
+    topics = ingest_both(project_dir)
+    cli.main(["index", "--topics", str(topics)])
+    write(project_dir / ".env", "RAGNOSIS_EMBEDDING_MODEL=other/model\n")
+
+    assert cli.main(["search", "pirates"]) == cli.EXIT_USAGE
+
+
+@pytest.mark.parametrize("k", ["0", "-2", "many"])
+def test_search_rejects_invalid_k(k: str) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["search", "pirates", "-k", k])
+    assert exit_info.value.code == cli.EXIT_USAGE
+
+
+def test_works_when_stdout_cannot_be_reconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Embedding hosts may replace stdout with a plain stream without reconfigure().
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    assert cli.main(["search", "pirates"]) == cli.EXIT_USAGE
+
+
+def test_format_results_without_hits() -> None:
+    assert cli.format_results([]) == "No results.\n"
+
+
+def test_format_results_shows_rank_score_source_and_preview() -> None:
+    result = SearchResult(make_chunk(section="Death", text="He was killed in 1718."), 0.8123)
+    assert cli.format_results([result]) == (
+        "1. [0.812] Blackbeard > Death\n"
+        "   https://en.wikipedia.org/wiki/Blackbeard\n"
+        "   He was killed in 1718.\n"
+    )
+
+
+def test_format_results_shortens_long_passages() -> None:
+    text = "word " * 100
+    output = cli.format_results([SearchResult(make_chunk(text=text), 0.5)])
+    preview = output.splitlines()[2].strip()
+    assert preview.endswith("…")
+    assert len(preview) <= cli.PREVIEW_CHARS + 1
