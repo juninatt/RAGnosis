@@ -335,10 +335,21 @@ class FakeOllama(FakeChatModel):
     reply: tuple[str, ...] = ("Anne Bonny ", "was an Irish pirate [1].")
     error: Exception | None = None
     created: list[tuple[str, str]] = []
+    keep_alives: list[str] = []
+    load_error: Exception | None = None
+    # Shared with FakeUvicorn, so tests can see what happened in which order.
+    events: list[str] = []
 
-    def __init__(self, model: str, base_url: str) -> None:
+    def __init__(self, model: str, base_url: str, *, keep_alive: str = "30m") -> None:
         super().__init__(*self.reply)
+        self.model = model
         self.created.append((model, base_url))
+        self.keep_alives.append(keep_alive)
+
+    def load(self) -> None:
+        self.events.append("load")
+        if self.load_error:
+            raise self.load_error
 
     def __enter__(self) -> FakeOllama:
         return self
@@ -361,6 +372,8 @@ def indexed(project_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_OK
     monkeypatch.setattr(cli, "OllamaClient", FakeOllama)
     monkeypatch.setattr(FakeOllama, "created", [])
+    monkeypatch.setattr(FakeOllama, "keep_alives", [])
+    monkeypatch.setattr(FakeOllama, "events", [])
     return project_dir
 
 
@@ -386,6 +399,16 @@ def test_ask_uses_model_and_address_from_settings(indexed: Path) -> None:
     )
     cli.main(["ask", "pirates"])
     assert FakeOllama.created == [("gemma4:e4b", "http://gpu-box:11434")]
+
+
+@pytest.mark.parametrize("command", [["ask", "pirates"], ["serve"]])
+def test_keep_alive_setting_reaches_ollama(
+    indexed: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    monkeypatch.setattr(cli, "uvicorn", FakeUvicorn())
+    write(indexed / ".env", "RAGNOSIS_LLM_KEEP_ALIVE=1h\n")
+    cli.main(command)
+    assert FakeOllama.keep_alives == ["1h"]
 
 
 def test_ask_says_when_nothing_is_cited(
@@ -462,6 +485,7 @@ class FakeUvicorn:
 
     def run(self, app: Any, **options: Any) -> None:
         self.calls.append({"app": app, **options})
+        FakeOllama.events.append("run")
 
 
 @pytest.fixture
@@ -477,6 +501,25 @@ def test_serve_starts_the_web_app_on_localhost(indexed: Path, fake_uvicorn: Fake
     (call,) = fake_uvicorn.calls
     assert call["host"] == "127.0.0.1"
     assert call["port"] == 8123
+
+
+def test_serve_loads_the_model_before_serving(indexed: Path, fake_uvicorn: FakeUvicorn) -> None:
+    cli.main(["serve"])
+    assert FakeOllama.events == ["load", "run"]
+
+
+def test_serve_still_starts_when_the_model_cannot_be_loaded(
+    indexed: Path,
+    fake_uvicorn: FakeUvicorn,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(FakeOllama, "load_error", LLMUnavailableError("start Ollama"))
+
+    assert cli.main(["serve"]) == cli.EXIT_OK
+
+    assert FakeOllama.events == ["load", "run"]
+    assert "Could not load the language model yet: start Ollama" in caplog.text
 
 
 def test_serve_defaults_to_port_8000(indexed: Path, fake_uvicorn: FakeUvicorn) -> None:

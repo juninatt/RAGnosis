@@ -89,11 +89,25 @@ def test_sends_model_messages_and_disables_thinking() -> None:
     assert body["model"] == "qwen3.5:4b"
     assert body["stream"] is True
     assert body["think"] is False
+    assert body["keep_alive"] == "30m"
     assert body["options"] == {"temperature": 0.5}
     assert body["messages"] == [
         {"role": "system", "content": "Answer briefly."},
         {"role": "user", "content": "Who was Blackbeard?"},
     ]
+
+
+def test_sends_the_configured_keep_alive() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, content=ndjson(DONE))
+
+    client = OllamaClient("qwen3.5:4b", keep_alive="-1", transport=httpx.MockTransport(handler))
+    with client:
+        client.chat(MESSAGES)
+    assert bodies[0]["keep_alive"] == "-1"
 
 
 # --- Failures, each with an error that says what to do ---
@@ -170,6 +184,65 @@ def test_reply_cut_off_before_done_raises() -> None:
     client = make_client(streaming(piece("Edward")))
     with client, pytest.raises(LLMError, match="without finishing"):
         client.chat(MESSAGES)
+
+
+# --- Loading the model ahead of the first question ---
+
+
+def test_load_asks_ollama_to_load_the_model_without_writing() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200, json={"model": "qwen3.5:4b", "done": True, "done_reason": "load"}
+        )
+
+    client = OllamaClient("qwen3.5:4b", keep_alive="1h", transport=httpx.MockTransport(handler))
+    with client:
+        client.load()
+
+    (request,) = requests
+    assert request.url.path == "/api/chat"
+    assert json.loads(request.content) == {
+        "model": "qwen3.5:4b",
+        "messages": [],
+        "stream": False,
+        "keep_alive": "1h",
+    }
+
+
+def test_load_reports_a_missing_model() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": "model 'qwen3.5:4b' not found"})
+
+    with make_client(handler) as client, pytest.raises(ModelNotFoundError, match="ollama pull"):
+        client.load()
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (httpx.ConnectError("refused"), LLMUnavailableError),
+        (httpx.ConnectTimeout("timed out"), LLMUnavailableError),
+        (httpx.ReadTimeout("slow"), LLMError),
+    ],
+    ids=["refused", "connect-timeout", "read-timeout"],
+)
+def test_load_translates_connection_errors(error: Exception, expected: type[LLMError]) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error
+
+    with make_client(handler) as client, pytest.raises(expected):
+        client.load()
+
+
+def test_load_reports_other_http_errors() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"error": "out of memory"})
+
+    with make_client(handler) as client, pytest.raises(LLMError, match="HTTP 500: out of memory"):
+        client.load()
 
 
 def test_close_releases_http_client() -> None:

@@ -24,6 +24,11 @@ def test_real_model_streams_a_reply() -> None:
     assert "black" in "".join(pieces).lower()
 
 
+def test_real_model_loads_without_writing() -> None:
+    with OllamaClient(DEFAULT_LLM_MODEL, DEFAULT_OLLAMA_URL) as client:
+        client.load()
+
+
 def test_real_server_reports_missing_model() -> None:
     client = OllamaClient("ragnosis-no-such-model", DEFAULT_OLLAMA_URL)
     with client, pytest.raises(ModelNotFoundError):

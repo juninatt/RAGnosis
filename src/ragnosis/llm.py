@@ -19,6 +19,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 TIMEOUT_SECONDS = 600.0
+# Ollama's own default is 5 minutes, after which the next question pays for
+# loading the model again.
+DEFAULT_KEEP_ALIVE = "30m"
 
 
 class LLMError(RuntimeError):
@@ -47,12 +50,20 @@ class OllamaClient:
         model: str,
         base_url: str = "http://localhost:11434",
         *,
+        keep_alive: str = DEFAULT_KEEP_ALIVE,
         transport: httpx.BaseTransport | None = None,
         timeout: float = TIMEOUT_SECONDS,
     ) -> None:
-        """``transport`` exists so tests can run without an Ollama server."""
+        """Create a client.
+
+        ``keep_alive`` is how long Ollama keeps the model in memory after a
+        reply ("30m", "1h"; "-1" for always). Loading takes about 9 seconds on a
+        laptop CPU, so a longer time spares that wait between questions.
+        ``transport`` exists so tests can run without an Ollama server.
+        """
         self.model = model
         self.base_url = base_url.rstrip("/")
+        self.keep_alive = keep_alive
         self._http = httpx.Client(transport=transport, timeout=timeout)
 
     def __enter__(self) -> OllamaClient:
@@ -82,6 +93,7 @@ class OllamaClient:
             "model": self.model,
             "stream": True,
             "think": False,
+            "keep_alive": self.keep_alive,
             "options": {"temperature": temperature},
             "messages": [{"role": m.role, "content": m.content} for m in messages],
         }
@@ -98,9 +110,7 @@ class OllamaClient:
                         if done:
                             return
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-            raise LLMUnavailableError(
-                f"Ollama is not reachable at {self.base_url}; start Ollama and try again"
-            ) from exc
+            raise self._unavailable() from exc
         except httpx.TransportError as exc:
             raise LLMError(f"Lost connection to Ollama: {exc}") from exc
         raise LLMError("Ollama ended the reply without finishing it")
@@ -108,6 +118,35 @@ class OllamaClient:
     def chat(self, messages: Sequence[Message], *, temperature: float = 0.2) -> str:
         """The whole reply at once."""
         return "".join(self.stream_chat(messages, temperature=temperature))
+
+    def load(self) -> None:
+        """Load the model into memory without writing anything.
+
+        Ollama loads a model when it gets a chat request with no messages.
+        Doing this before the first question spares that question the load time.
+
+        Raises:
+            LLMUnavailableError, ModelNotFoundError, LLMError: as for ``stream_chat``.
+        """
+        payload = {
+            "model": self.model,
+            "messages": [],
+            "stream": False,
+            "keep_alive": self.keep_alive,
+        }
+        try:
+            response = self._http.post(f"{self.base_url}/api/chat", json=payload)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            raise self._unavailable() from exc
+        except httpx.TransportError as exc:
+            raise LLMError(f"Lost connection to Ollama: {exc}") from exc
+        if response.is_error:
+            raise self._http_error(response)
+
+    def _unavailable(self) -> LLMUnavailableError:
+        return LLMUnavailableError(
+            f"Ollama is not reachable at {self.base_url}; start Ollama and try again"
+        )
 
     def _http_error(self, response: httpx.Response) -> LLMError:
         reason = _error_text(response)

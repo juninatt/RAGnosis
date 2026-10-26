@@ -208,7 +208,9 @@ def run_ask(settings: Settings, *, question: str, k: int) -> int:
 
     embedder = SentenceTransformerEmbedder(settings.embedding_model)
     try:
-        with OllamaClient(settings.llm_model, settings.ollama_url) as llm:
+        with OllamaClient(
+            settings.llm_model, settings.ollama_url, keep_alive=settings.llm_keep_alive
+        ) as llm:
             answer = ask(question, store=store, embedder=embedder, llm=llm, k=k, on_text=_show)
     except (LLMUnavailableError, ModelNotFoundError) as exc:
         logger.error("%s", exc)
@@ -233,15 +235,31 @@ def run_serve(settings: Settings, *, port: int) -> int:
 
     # Load the models once here, not on every question.
     embedder = SentenceTransformerEmbedder(settings.embedding_model)
-    with OllamaClient(settings.llm_model, settings.ollama_url) as llm:
+    with OllamaClient(
+        settings.llm_model, settings.ollama_url, keep_alive=settings.llm_keep_alive
+    ) as llm:
 
         def answer_question(question: str, k: int, on_text: Callable[[str], None]) -> Answer:
             return ask(question, store=store, embedder=embedder, llm=llm, k=k, on_text=on_text)
 
+        _warm_up(llm)
         logger.info("RAGnosis is running at http://localhost:%d (Ctrl+C stops it)", port)
         # Localhost only: the UI is for this computer, not the network (0007).
         uvicorn.run(create_app(answer_question), host=SERVE_HOST, port=port, log_level="warning")
     return EXIT_OK
+
+
+def _warm_up(llm: OllamaClient) -> None:
+    """Load the language model now, so the first question does not wait for it.
+
+    A failure is only a warning: Ollama may be started after the server, and
+    each question reports clearly if the model is still unavailable then.
+    """
+    logger.info("Loading the language model %s", llm.model)
+    try:
+        llm.load()
+    except LLMError as exc:
+        logger.warning("Could not load the language model yet: %s", exc)
 
 
 def format_sources(answer: Answer) -> str:

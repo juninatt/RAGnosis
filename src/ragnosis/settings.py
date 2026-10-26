@@ -14,12 +14,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from ragnosis.llm import DEFAULT_KEEP_ALIVE
+
 DATA_DIR_VAR = "RAGNOSIS_DATA_DIR"
 TOPICS_FILE_VAR = "RAGNOSIS_TOPICS_FILE"
 WIKI_LANGUAGE_VAR = "RAGNOSIS_WIKI_LANGUAGE"
 EMBEDDING_MODEL_VAR = "RAGNOSIS_EMBEDDING_MODEL"
 OLLAMA_URL_VAR = "RAGNOSIS_OLLAMA_URL"
 LLM_MODEL_VAR = "RAGNOSIS_LLM_MODEL"
+LLM_KEEP_ALIVE_VAR = "RAGNOSIS_LLM_KEEP_ALIVE"
 
 DEFAULT_DATA_DIR = Path("data")
 DEFAULT_TOPICS_FILE = Path("topics/pirates-and-antiquity-europe.txt")
@@ -27,10 +30,13 @@ DEFAULT_WIKI_LANGUAGE = "en"
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_LLM_MODEL = "qwen3.5:4b"
+DEFAULT_LLM_KEEP_ALIVE = DEFAULT_KEEP_ALIVE
 
 # The language code becomes part of the API host name, so only accept what real
 # Wikipedia codes look like ("en", "sv", "zh-yue") and nothing that could change the URL.
 _LANGUAGE_PATTERN = re.compile(r"[a-z]{2,3}(-[a-z]+)*")
+# Durations as Ollama reads them: "30m", "1h30m", "90s", or "-1" for "keep forever".
+_DURATION_PATTERN = re.compile(r"-1|0|(\d+(\.\d+)?(ms|s|m|h))+")
 
 
 def is_valid_language(code: str) -> bool:
@@ -48,6 +54,7 @@ class Settings:
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     ollama_url: str = DEFAULT_OLLAMA_URL
     llm_model: str = DEFAULT_LLM_MODEL
+    llm_keep_alive: str = DEFAULT_LLM_KEEP_ALIVE
 
     def __post_init__(self) -> None:
         if not is_valid_language(self.wiki_language):
@@ -59,6 +66,10 @@ class Settings:
         url = urlsplit(self.ollama_url)
         if url.scheme not in ("http", "https") or not url.hostname:
             raise ValueError(f"Ollama URL must be an http(s) address: {self.ollama_url!r}")
+        if not _DURATION_PATTERN.fullmatch(self.llm_keep_alive):
+            raise ValueError(
+                f"Keep-alive must be a duration like 30m, 1h or -1: {self.llm_keep_alive!r}"
+            )
 
     @property
     def articles_dir(self) -> Path:
@@ -81,4 +92,5 @@ class Settings:
             embedding_model=env.get(EMBEDDING_MODEL_VAR) or DEFAULT_EMBEDDING_MODEL,
             ollama_url=env.get(OLLAMA_URL_VAR) or DEFAULT_OLLAMA_URL,
             llm_model=env.get(LLM_MODEL_VAR) or DEFAULT_LLM_MODEL,
+            llm_keep_alive=env.get(LLM_KEEP_ALIVE_VAR) or DEFAULT_LLM_KEEP_ALIVE,
         )

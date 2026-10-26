@@ -11,11 +11,13 @@ from ragnosis.settings import (
     DATA_DIR_VAR,
     DEFAULT_DATA_DIR,
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_LLM_KEEP_ALIVE,
     DEFAULT_LLM_MODEL,
     DEFAULT_OLLAMA_URL,
     DEFAULT_TOPICS_FILE,
     DEFAULT_WIKI_LANGUAGE,
     EMBEDDING_MODEL_VAR,
+    LLM_KEEP_ALIVE_VAR,
     LLM_MODEL_VAR,
     OLLAMA_URL_VAR,
     TOPICS_FILE_VAR,
@@ -31,7 +33,23 @@ ALL_VARS = (
     EMBEDDING_MODEL_VAR,
     OLLAMA_URL_VAR,
     LLM_MODEL_VAR,
+    LLM_KEEP_ALIVE_VAR,
 )
+
+
+def test_keep_alive_defaults_to_thirty_minutes() -> None:
+    assert Settings.from_env({}).llm_keep_alive == DEFAULT_LLM_KEEP_ALIVE == "30m"
+
+
+@pytest.mark.parametrize("value", ["30m", "1h", "1h30m", "90s", "500ms", "2.5h", "0", "-1"])
+def test_keep_alive_accepts_ollama_durations(value: str) -> None:
+    assert Settings.from_env({LLM_KEEP_ALIVE_VAR: value}).llm_keep_alive == value
+
+
+@pytest.mark.parametrize("value", ["30", "forever", "30 m", "-5m", "1d", "m", " 30m"])
+def test_keep_alive_rejects_other_values(value: str) -> None:
+    with pytest.raises(ValueError, match="Keep-alive"):
+        Settings.from_env({LLM_KEEP_ALIVE_VAR: value})
 
 
 def test_defaults_when_environment_is_empty() -> None:
