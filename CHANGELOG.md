@@ -5,12 +5,16 @@ Notable changes per release. The format follows
 [Semantic Versioning](https://semver.org/): until 1.0.0, commands, settings and
 the index format may still change between minor versions.
 
-## [Unreleased]
+## [0.3.0] - 2026-10-26
+
+Answers: questions are answered from the passages, with cited sources.
 
 ### Added
 
 - `ask` command: answers from the best passages with a local model through
   Ollama (`qwen3.5:4b` by default), streamed as written, with cited sources.
+- README note on running the test and type-check tools as modules when
+  Windows Smart App Control blocks their launchers.
 
 ## [0.2.0] - 2026-10-26
 
@@ -41,4 +45,5 @@ First working pipeline step: articles from Wikipedia.
   (pirates and antiquity in Europe) as plain text.
 - Settings in env files, central logging, and CI on Linux and Windows.
 
+[0.3.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.3.0
 [0.2.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.2.0
