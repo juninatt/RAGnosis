@@ -2,7 +2,9 @@
 
 ``POST /api/ask`` streams its answer as JSON lines, one object per line:
 ``{"type": "text", "text": ...}`` while the model writes, then either
-``{"type": "sources", "sources": [...]}`` or ``{"type": "error", ...}``.
+``{"type": "sources", "sources": [...], "timing": {...}}`` or
+``{"type": "error", ...}``. The timing (seconds to the first words and in
+total) lets the page show how long the answer took.
 
 Answering is slow and CPU-bound, so only one question runs at a time; a second
 request is turned away with HTTP 429 instead of slowing both down. The answer
@@ -16,6 +18,7 @@ import json
 import logging
 import queue
 import threading
+import time
 from collections.abc import Callable, Iterator
 from importlib.resources import files
 from typing import Any
@@ -41,8 +44,13 @@ MAX_K = 20
 MAX_BODY_BYTES = 16 * 1024
 
 
-def create_app(answer_question: AnswerFn) -> Starlette:
-    """Build the web app around ``answer_question``."""
+def create_app(
+    answer_question: AnswerFn, *, clock: Callable[[], float] = time.monotonic
+) -> Starlette:
+    """Build the web app around ``answer_question``.
+
+    ``clock`` times each answer; tests pass a fake one.
+    """
     busy = threading.Lock()
     page = files("ragnosis").joinpath("static", "index.html").read_text(encoding="utf-8")
 
@@ -69,7 +77,7 @@ def create_app(answer_question: AnswerFn) -> Starlette:
         events: queue.Queue[dict[str, Any] | None] = queue.Queue()
         worker = threading.Thread(
             target=_answer_in_background,
-            args=(answer_question, question, k, events, busy),
+            args=(answer_question, question, k, events, busy, clock),
             daemon=True,
         )
         worker.start()
@@ -110,13 +118,24 @@ def _answer_in_background(
     k: int,
     events: queue.Queue[dict[str, Any] | None],
     busy: threading.Lock,
+    clock: Callable[[], float],
 ) -> None:
     """Run one answer, turning text pieces, sources and errors into events."""
+    start = clock()
+    first_text_at: list[float] = []
+
+    def on_text(text: str) -> None:
+        if not first_text_at:
+            first_text_at.append(clock() - start)
+        events.put({"type": "text", "text": text})
+
     try:
-        answer = answer_question(
-            question, k, lambda text: events.put({"type": "text", "text": text})
-        )
-        events.put({"type": "sources", "sources": _sources(answer)})
+        answer = answer_question(question, k, on_text)
+        timing = {
+            "first_text_seconds": round(first_text_at[0], 1) if first_text_at else None,
+            "total_seconds": round(clock() - start, 1),
+        }
+        events.put({"type": "sources", "sources": _sources(answer), "timing": timing})
     except (LLMUnavailableError, ModelNotFoundError) as exc:
         logger.error("%s", exc)
         events.put({"type": "error", "kind": "setup", "message": str(exc)})

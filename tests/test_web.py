@@ -48,8 +48,15 @@ class Recorder:
         return Answer(question, "".join(self.pieces), PASSAGES)
 
 
-def client_for(answer: AnswerFn) -> TestClient:
-    return TestClient(create_app(answer), base_url="http://localhost")
+def ticking(*times: float) -> Callable[[], float]:
+    """A clock that returns ``times`` in order, then keeps returning the last one."""
+    remaining = list(times)
+    return lambda: remaining.pop(0) if len(remaining) > 1 else remaining[0]
+
+
+def client_for(answer: AnswerFn, clock: Callable[[], float] | None = None) -> TestClient:
+    app = create_app(answer, clock=clock or ticking(0.0))
+    return TestClient(app, base_url="http://localhost")
 
 
 def ask(client: TestClient, body: Any = None, **kwargs: Any) -> Any:
@@ -80,7 +87,7 @@ def test_page_is_served() -> None:
 
 
 def test_streams_text_pieces_then_cited_sources() -> None:
-    response = ask(client_for(Recorder()))
+    response = ask(client_for(Recorder(), clock=ticking(100.0, 112.34, 141.06)))
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/x-ndjson")
@@ -103,13 +110,44 @@ def test_streams_text_pieces_then_cited_sources() -> None:
                     "url": "https://en.wikipedia.org/wiki/Blackbeard",
                 },
             ],
+            "timing": {"first_text_seconds": 12.3, "total_seconds": 41.1},
         },
     ]
 
 
 def test_answer_without_citations_has_empty_sources() -> None:
     response = ask(client_for(Recorder("I cannot answer from the sources.")))
-    assert events(response)[-1] == {"type": "sources", "sources": []}
+    assert events(response)[-1]["sources"] == []
+
+
+def test_timing_counts_from_the_start_of_answering() -> None:
+    # Clock readings: answer starts, first text arrives, answer ends.
+    response = ask(client_for(Recorder("One piece."), clock=ticking(5.0, 7.0, 9.5)))
+    assert events(response)[-1]["timing"] == {"first_text_seconds": 2.0, "total_seconds": 4.5}
+
+
+def test_only_the_first_piece_sets_the_time_to_first_text() -> None:
+    clock = ticking(0.0, 3.0, 4.0, 5.0, 6.0)
+    response = ask(client_for(Recorder("a", "b", "c"), clock=clock))
+    assert events(response)[-1]["timing"] == {"first_text_seconds": 3.0, "total_seconds": 4.0}
+
+
+def test_answer_without_any_text_has_no_time_to_first_text() -> None:
+    silent = Recorder()
+    silent.pieces = ()
+    response = ask(client_for(silent, clock=ticking(0.0, 8.0)))
+    assert events(response)[-1]["timing"] == {"first_text_seconds": None, "total_seconds": 8.0}
+
+
+def test_errors_carry_no_timing() -> None:
+    response = ask(client_for(Recorder("Partial", error=LLMError("failed"))))
+    assert "timing" not in events(response)[-1]
+
+
+def test_default_clock_measures_real_time() -> None:
+    client = TestClient(create_app(Recorder()), base_url="http://localhost")
+    timing = events(ask(client))[-1]["timing"]
+    assert 0 <= timing["first_text_seconds"] <= timing["total_seconds"] < 5
 
 
 def test_passes_trimmed_question_and_default_k() -> None:
@@ -301,6 +339,13 @@ def test_page_talks_to_the_ask_api_with_json() -> None:
     text = page()
     assert 'fetch("/api/ask"' in text
     assert '"Content-Type": "application/json"' in text
+
+
+def test_page_shows_the_answer_time_as_text() -> None:
+    text = page()
+    assert '<p id="timing" hidden></p>' in text
+    assert "timingLine.textContent = " in text
+    assert "Answered in" in text
 
 
 def test_page_only_links_sources_to_wikipedia_over_https() -> None:
