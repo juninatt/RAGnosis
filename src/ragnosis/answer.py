@@ -26,12 +26,46 @@ SYSTEM_PROMPT = (
     "You answer questions using only the numbered sources given. "
     "Cite every claim with the source number in brackets, like [1] or [2][3]. "
     "If the sources do not contain the answer, say that you cannot answer from the sources. "
-    "Answer in the same language as the question. Be concise: at most 5 sentences."
+    "Be concise: at most 5 sentences."
+)
+# Asked to answer "in the question's language", the model answered Swedish
+# questions in Norwegian or English; naming the language fixes that (0006).
+SAME_LANGUAGE_RULE = "Answer in the same language as the question."
+SWEDISH_RULE = (
+    "The question is in Swedish: answer in Swedish (svenska), not in Norwegian, Danish or English."
 )
 NO_PASSAGES_TEXT = "There are no indexed passages to answer from; run ingest and index first."
 
 # "[1]", "[2][3]" and "[1, 2]" all occur in model output.
 _CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+# Words that start or carry Swedish questions and occur neither in English nor
+# in Norwegian or Danish (hvem, hvad, hvordan). "var" is left out: it is
+# Norwegian and Danish too.
+_SWEDISH_WORDS = frozenset(
+    {
+        "vem", "vad", "vilken", "vilket", "vilka", "när", "hur", "varför",
+        "är", "och", "inte", "berätta", "beskriv", "förklara", "jämför", "finns",
+    }
+)  # fmt: skip
+_WORD = re.compile(r"[a-zåäöæø]+")
+
+
+def is_swedish(question: str) -> bool:
+    """Whether ``question`` is recognisably Swedish.
+
+    ä and ö are Swedish letters (Norwegian and Danish write æ and ø), and a few
+    common Swedish words are enough for short questions such as "Vem var
+    Hannibal?". Anything else gets the general same-language rule.
+    """
+    text = question.lower()
+    return "ä" in text or "ö" in text or any(w in _SWEDISH_WORDS for w in _WORD.findall(text))
+
+
+def system_prompt(question: str) -> str:
+    """The instructions, with the rule for which language to answer in."""
+    rule = SWEDISH_RULE if is_swedish(question) else SAME_LANGUAGE_RULE
+    return f"{SYSTEM_PROMPT} {rule}"
 
 
 class ChatModel(Protocol):
@@ -78,7 +112,7 @@ def build_messages(question: str, passages: Sequence[SearchResult]) -> list[Mess
         for number, result in enumerate(passages, start=1)
     )
     return [
-        Message("system", SYSTEM_PROMPT),
+        Message("system", system_prompt(question)),
         Message("user", f"Sources:\n\n{sources}\n\nQuestion: {question}"),
     ]
 

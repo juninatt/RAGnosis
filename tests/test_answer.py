@@ -10,11 +10,15 @@ from hypothesis import strategies as st
 
 from ragnosis.answer import (
     NO_PASSAGES_TEXT,
+    SAME_LANGUAGE_RULE,
+    SWEDISH_RULE,
     SYSTEM_PROMPT,
     Answer,
     ask,
     build_messages,
     cited_numbers,
+    is_swedish,
+    system_prompt,
 )
 from ragnosis.llm import LLMError
 from ragnosis.vector_store import SearchResult, VectorStore
@@ -88,7 +92,7 @@ def test_prompt_has_instructions_then_numbered_sources_and_question() -> None:
     )
 
     assert [m.role for m in messages] == ["system", "user"]
-    assert messages[0].content == SYSTEM_PROMPT
+    assert messages[0].content == f"{SYSTEM_PROMPT} {SAME_LANGUAGE_RULE}"
     assert messages[1].content == (
         "Sources:\n\n"
         "[1] Blackbeard > Death\nKilled in 1718.\n\n"
@@ -97,9 +101,63 @@ def test_prompt_has_instructions_then_numbered_sources_and_question() -> None:
     )
 
 
-@pytest.mark.parametrize("rule", ["only the numbered sources", "[1]", "cannot answer", "language"])
+@pytest.mark.parametrize("rule", ["only the numbered sources", "[1]", "cannot answer"])
 def test_system_prompt_states_the_grounding_rules(rule: str) -> None:
     assert rule in SYSTEM_PROMPT
+
+
+# --- Answer language ---
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Vem var Anne Bonny?",
+        "Vem ledde den karthagiska armén över Alperna?",
+        "Vilken flagga hade pirater?",
+        "Hur dog Blackbeard?",
+        "VAD hände vid Salamis?",
+        "Berätta om Hannibal",
+        "Varför föll Rom?",
+        "Störtebeker",
+    ],
+)
+def test_recognises_swedish_questions(question: str) -> None:
+    assert is_swedish(question)
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Who was Anne Bonny?",
+        "How did Blackbeard die?",
+        "What flag did pirates fly?",
+        "Hvem var Anne Bonny?",  # Norwegian and Danish
+        "Hvordan døde Svartskjegg?",  # Norwegian
+        "Hvad var Jolly Roger?",  # Danish
+        "Hannibal",
+        "",
+        "Was ist die Hauptstadt?",  # German
+    ],
+)
+def test_does_not_mistake_other_languages_for_swedish(question: str) -> None:
+    assert not is_swedish(question)
+
+
+def test_swedish_questions_are_told_to_answer_in_swedish() -> None:
+    prompt = system_prompt("Vem var Anne Bonny?")
+    assert prompt == f"{SYSTEM_PROMPT} {SWEDISH_RULE}"
+    assert "Swedish" in prompt
+    assert "Norwegian" in prompt
+
+
+def test_other_questions_keep_the_same_language_rule() -> None:
+    assert system_prompt("Who was Anne Bonny?") == f"{SYSTEM_PROMPT} {SAME_LANGUAGE_RULE}"
+
+
+def test_prompt_for_a_swedish_question_carries_the_swedish_rule() -> None:
+    messages = build_messages("Vem var Anne Bonny?", [result("Anne Bonny")])
+    assert messages[0].content.endswith(SWEDISH_RULE)
 
 
 # --- ask ---
