@@ -1,4 +1,4 @@
-"""The web UI's HTTP layer: a small JSON API (docs/decisions/0007).
+"""The web UI's HTTP layer: one page and a small JSON API (docs/decisions/0007).
 
 ``POST /api/ask`` streams its answer as JSON lines, one object per line:
 ``{"type": "text", "text": ...}`` while the model writes, then either
@@ -17,13 +17,14 @@ import logging
 import queue
 import threading
 from collections.abc import Callable, Iterator
+from importlib.resources import files
 from typing import Any
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from ragnosis.answer import DEFAULT_K, Answer
@@ -43,6 +44,10 @@ MAX_BODY_BYTES = 16 * 1024
 def create_app(answer_question: AnswerFn) -> Starlette:
     """Build the web app around ``answer_question``."""
     busy = threading.Lock()
+    page = files("ragnosis").joinpath("static", "index.html").read_text(encoding="utf-8")
+
+    async def index(request: Request) -> Response:
+        return HTMLResponse(page)
 
     async def health(request: Request) -> Response:
         return JSONResponse({"status": "ok"})
@@ -72,6 +77,7 @@ def create_app(answer_question: AnswerFn) -> Starlette:
 
     app = Starlette(
         routes=[
+            Route("/", index),
             Route("/api/health", health),
             Route("/api/ask", ask_endpoint, methods=["POST"]),
         ],

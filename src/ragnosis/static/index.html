@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RAGnosis</title>
+  <style>
+    :root {
+      --bg: #fbfaf7; --fg: #1f2328; --muted: #646b73; --line: #d8d4cc;
+      --accent: #8a4b08; --panel: #ffffff; --error: #b42318;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181b; --fg: #e7e4de; --muted: #9aa1a9; --line: #343940;
+        --accent: #f0a35e; --panel: #1e2125; --error: #ff7b72;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+    h1 { font-size: 1.6rem; margin: 0 0 0.2rem; }
+    .tagline { color: var(--muted); margin: 0 0 1.5rem; }
+    form { display: flex; gap: 0.5rem; }
+    input {
+      flex: 1; min-width: 0; padding: 0.7rem 0.9rem; font: inherit; color: inherit;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 0.5rem;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button {
+      padding: 0.7rem 1.2rem; font: inherit; font-weight: 600; cursor: pointer;
+      color: var(--bg); background: var(--accent); border: 0; border-radius: 0.5rem;
+    }
+    button:disabled { opacity: 0.5; cursor: progress; }
+    #status { color: var(--muted); min-height: 1.6em; margin: 1rem 0 0.25rem; }
+    #status.error { color: var(--error); }
+    #answer { white-space: pre-wrap; margin: 0; }
+    #sources-box { margin-top: 1.5rem; border-top: 1px solid var(--line); padding-top: 0.75rem; }
+    #sources-box h2 { font-size: 1rem; margin: 0 0 0.4rem; }
+    #sources { list-style: none; margin: 0; padding: 0; }
+    #sources li { margin: 0.2rem 0; }
+    .number { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 0.4rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>RAGnosis</h1>
+  <p class="tagline">Ask Wikipedia about pirates and antiquity. Answers cite their sources.</p>
+
+  <form id="ask-form">
+    <input id="question" name="question" maxlength="1000" autocomplete="off" required
+           placeholder="Vem var Anne Bonny?" aria-label="Question">
+    <button id="ask-button" type="submit">Ask</button>
+  </form>
+
+  <p id="status" role="status" aria-live="polite"></p>
+  <p id="answer" aria-live="polite"></p>
+
+  <section id="sources-box" hidden>
+    <h2>Sources</h2>
+    <ul id="sources"></ul>
+  </section>
+</main>
+
+<script>
+  // Everything the model writes is inserted with textContent, never innerHTML,
+  // so an answer cannot inject markup or scripts into the page.
+  const form = document.getElementById("ask-form");
+  const input = document.getElementById("question");
+  const button = document.getElementById("ask-button");
+  const statusLine = document.getElementById("status");
+  const answer = document.getElementById("answer");
+  const sourcesBox = document.getElementById("sources-box");
+  const sources = document.getElementById("sources");
+
+  function setStatus(text, isError = false) {
+    statusLine.textContent = text;
+    statusLine.className = isError ? "error" : "";
+  }
+
+  function showSources(list) {
+    sources.replaceChildren();
+    for (const source of list) {
+      const item = document.createElement("li");
+      const number = document.createElement("span");
+      number.className = "number";
+      number.textContent = `[${source.number}]`;
+      item.append(number);
+      // Only link to Wikipedia over https; anything else is shown as plain text.
+      if (/^https:\/\/[a-z-]+\.wikipedia\.org\//.test(source.url)) {
+        const link = document.createElement("a");
+        link.href = source.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = `${source.title} › ${source.section}`;
+        item.append(link);
+      } else {
+        item.append(`${source.title} › ${source.section}`);
+      }
+      sources.append(item);
+    }
+    sourcesBox.hidden = list.length === 0;
+    if (list.length === 0) setStatus("No sources cited.");
+  }
+
+  function handle(event) {
+    if (event.type === "text") {
+      answer.textContent += event.text;
+    } else if (event.type === "sources") {
+      setStatus("");
+      showSources(event.sources);
+    } else if (event.type === "error") {
+      setStatus(event.message, true);
+    }
+  }
+
+  async function ask(question) {
+    const response = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setStatus(body.error || `The server answered ${response.status}.`, true);
+      return;
+    }
+    setStatus("Writing the answer…");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) if (line.trim()) handle(JSON.parse(line));
+      if (done) break;
+    }
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    answer.textContent = "";
+    sources.replaceChildren();
+    sourcesBox.hidden = true;
+    setStatus("Finding passages and starting the model… this can take a minute.");
+    button.disabled = true;
+    try {
+      await ask(question);
+    } catch (error) {
+      setStatus("Lost contact with the RAGnosis server. Is it still running?", true);
+    } finally {
+      button.disabled = false;
+      input.focus();
+    }
+  });
+</script>
+</body>
+</html>

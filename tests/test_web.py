@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -59,13 +60,20 @@ def events(response: Any) -> list[dict[str, Any]]:
     return [json.loads(line) for line in response.text.splitlines() if line]
 
 
-# --- Health ---
+# --- Health and page ---
 
 
 def test_health() -> None:
     response = client_for(Recorder()).get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_page_is_served() -> None:
+    response = client_for(Recorder()).get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert '<form id="ask-form">' in response.text
 
 
 # --- Asking ---
@@ -270,3 +278,31 @@ def test_requests_for_other_host_names_are_refused(host: str) -> None:
 def test_local_host_names_are_accepted(host: str) -> None:
     client = TestClient(create_app(Recorder()), base_url=f"http://{host}:8000")
     assert client.get("/api/health").status_code == 200
+
+
+# --- The page itself ---
+
+
+def page() -> str:
+    return str(client_for(Recorder()).get("/").text)
+
+
+def test_page_loads_nothing_from_elsewhere() -> None:
+    # Works offline and sends no question anywhere else.
+    assert not re.search(r"""(src|href)\s*=\s*["']?\s*(https?:)?//""", page(), re.IGNORECASE)
+    assert "@import" not in page()
+
+
+def test_page_never_inserts_model_output_as_html() -> None:
+    assert not re.search(r"\.(innerHTML|outerHTML)\s*=|insertAdjacentHTML|document\.write", page())
+
+
+def test_page_talks_to_the_ask_api_with_json() -> None:
+    text = page()
+    assert 'fetch("/api/ask"' in text
+    assert '"Content-Type": "application/json"' in text
+
+
+def test_page_only_links_sources_to_wikipedia_over_https() -> None:
+    assert r"/^https:\/\/[a-z-]+\.wikipedia\.org\//" in page()
+    assert 'rel = "noopener noreferrer"' in page()
