@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ragnosis.chunking import Chunk
 from ragnosis.wikipedia import Article
 
 
@@ -19,6 +20,20 @@ def make_article(**overrides: Any) -> Article:
     }
     fields.update(overrides)
     return Article(**fields)
+
+
+def make_chunk(**overrides: Any) -> Chunk:
+    fields: dict[str, Any] = {
+        "chunk_id": "1-0",
+        "page_id": 1,
+        "article_title": "Blackbeard",
+        "section": "Introduction",
+        "position": 0,
+        "text": "Edward Teach, better known as Blackbeard, was an English pirate.",
+        "url": "https://en.wikipedia.org/wiki/Blackbeard",
+    }
+    fields.update(overrides)
+    return Chunk(**fields)
 
 
 def api_page(**overrides: Any) -> dict[str, Any]:
