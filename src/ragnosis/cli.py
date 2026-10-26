@@ -12,8 +12,10 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
+
+import uvicorn
 
 from ragnosis.answer import DEFAULT_K, Answer, ask
 from ragnosis.article_store import ArticleStore
@@ -26,6 +28,7 @@ from ragnosis.logging_config import setup_logging
 from ragnosis.settings import Settings
 from ragnosis.topics import load_titles
 from ragnosis.vector_store import CorruptIndexError, SearchResult, VectorStore
+from ragnosis.web import create_app
 from ragnosis.wikipedia import WikipediaClient
 
 logger = logging.getLogger(__name__)
@@ -35,12 +38,21 @@ EXIT_FAILURES = 1
 EXIT_USAGE = 2
 
 PREVIEW_CHARS = 240
+SERVE_HOST = "127.0.0.1"
+DEFAULT_PORT = 8000
 
 
 def positive_int(value: str) -> int:
     number = int(value)
     if number < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
+    return number
+
+
+def port_number(value: str) -> int:
+    number = int(value)
+    if not 1 <= number <= 65535:
+        raise argparse.ArgumentTypeError("must be from 1 to 65535")
     return number
 
 
@@ -82,6 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_K,
         help=f"number of passages the model reads (default: {DEFAULT_K})",
     )
+
+    serve_parser = commands.add_parser("serve", help="start the web UI on this computer")
+    serve_parser.add_argument(
+        "--port", type=port_number, default=DEFAULT_PORT, help=f"(default: {DEFAULT_PORT})"
+    )
     return parser
 
 
@@ -107,7 +124,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_index(settings, topics=args.topics, rebuild=args.rebuild)
     if args.command == "search":
         return run_search(settings, query=args.query, k=args.k)
-    return run_ask(settings, question=args.question, k=args.k)
+    if args.command == "ask":
+        return run_ask(settings, question=args.question, k=args.k)
+    return run_serve(settings, port=args.port)
 
 
 def run_ingest(settings: Settings, *, topics: Path | None, refresh: bool) -> int:
@@ -200,6 +219,28 @@ def run_ask(settings: Settings, *, question: str, k: int) -> int:
         return EXIT_FAILURES
 
     _show("\n\n" + format_sources(answer))
+    return EXIT_OK
+
+
+def run_serve(settings: Settings, *, port: int) -> int:
+    """Start the web UI; runs until stopped with Ctrl+C."""
+    if not VectorStore.exists(settings.index_dir):
+        logger.error("No index in %s; run index first", settings.index_dir)
+        return EXIT_USAGE
+    store = _load_store(settings)
+    if store is None:
+        return EXIT_USAGE
+
+    # Load the models once here, not on every question.
+    embedder = SentenceTransformerEmbedder(settings.embedding_model)
+    with OllamaClient(settings.llm_model, settings.ollama_url) as llm:
+
+        def answer_question(question: str, k: int, on_text: Callable[[str], None]) -> Answer:
+            return ask(question, store=store, embedder=embedder, llm=llm, k=k, on_text=on_text)
+
+        logger.info("RAGnosis is running at http://localhost:%d (Ctrl+C stops it)", port)
+        # Localhost only: the UI is for this computer, not the network (0007).
+        uvicorn.run(create_app(answer_question), host=SERVE_HOST, port=port, log_level="warning")
     return EXIT_OK
 
 

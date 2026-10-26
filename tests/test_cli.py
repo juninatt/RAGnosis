@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import io
+import json
 import runpy
 import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from types import TracebackType
+from typing import Any
 
 import pytest
 from factories import FakeChatModel, FakeEmbedder, make_article, make_chunk
+from starlette.testclient import TestClient
 
 from ragnosis import cli
 from ragnosis.answer import Answer
@@ -446,6 +449,79 @@ def test_ask_refuses_index_built_with_another_model(indexed: Path) -> None:
 def test_ask_rejects_blank_question(question: str, caplog: pytest.LogCaptureFixture) -> None:
     assert cli.main(["ask", question]) == cli.EXIT_USAGE
     assert "must not be blank" in caplog.text
+
+
+# --- serve ---
+
+
+class FakeUvicorn:
+    """Records the app instead of starting a server."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def run(self, app: Any, **options: Any) -> None:
+        self.calls.append({"app": app, **options})
+
+
+@pytest.fixture
+def fake_uvicorn(monkeypatch: pytest.MonkeyPatch) -> FakeUvicorn:
+    fake = FakeUvicorn()
+    monkeypatch.setattr(cli, "uvicorn", fake)
+    return fake
+
+
+def test_serve_starts_the_web_app_on_localhost(indexed: Path, fake_uvicorn: FakeUvicorn) -> None:
+    assert cli.main(["serve", "--port", "8123"]) == cli.EXIT_OK
+
+    (call,) = fake_uvicorn.calls
+    assert call["host"] == "127.0.0.1"
+    assert call["port"] == 8123
+
+
+def test_serve_defaults_to_port_8000(indexed: Path, fake_uvicorn: FakeUvicorn) -> None:
+    cli.main(["serve"])
+    assert fake_uvicorn.calls[0]["port"] == 8000
+
+
+def test_served_app_answers_with_the_configured_models(
+    indexed: Path, fake_uvicorn: FakeUvicorn
+) -> None:
+    write(indexed / ".env", "RAGNOSIS_LLM_MODEL=gemma4:e4b\n")
+    cli.main(["serve"])
+    client = TestClient(fake_uvicorn.calls[0]["app"], base_url="http://localhost")
+
+    response = client.post("/api/ask", json={"question": "Irish pirate Calico Jack", "k": 1})
+
+    lines = [json.loads(line) for line in response.text.splitlines()]
+    assert "".join(e["text"] for e in lines if e["type"] == "text") == (
+        "Anne Bonny was an Irish pirate [1]."
+    )
+    assert lines[-1]["sources"][0]["title"] == "Anne Bonny"
+    assert FakeOllama.created == [("gemma4:e4b", "http://localhost:11434")]
+
+
+def test_serve_without_index_exits_with_usage_code(
+    fake_uvicorn: FakeUvicorn, caplog: pytest.LogCaptureFixture
+) -> None:
+    assert cli.main(["serve"]) == cli.EXIT_USAGE
+    assert "run index first" in caplog.text
+    assert fake_uvicorn.calls == []
+
+
+def test_serve_refuses_index_built_with_another_model(
+    indexed: Path, fake_uvicorn: FakeUvicorn
+) -> None:
+    write(indexed / ".env", "RAGNOSIS_EMBEDDING_MODEL=other/model\n")
+    assert cli.main(["serve"]) == cli.EXIT_USAGE
+    assert fake_uvicorn.calls == []
+
+
+@pytest.mark.parametrize("port", ["0", "65536", "-1", "http"])
+def test_serve_rejects_invalid_port(port: str, fake_uvicorn: FakeUvicorn) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["serve", "--port", port])
+    assert exit_info.value.code == cli.EXIT_USAGE
 
 
 def test_format_sources_lists_cited_passages_in_citation_order() -> None:

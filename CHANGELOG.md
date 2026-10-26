@@ -5,6 +5,13 @@ Notable changes per release. The format follows
 [Semantic Versioning](https://semver.org/): until 1.0.0, commands, settings and
 the index format may still change between minor versions.
 
+## [Unreleased]
+
+### Added
+
+- `serve` command: a local web UI where answers stream in and cited sources
+  link to Wikipedia; localhost only, one question at a time.
+
 ## [0.3.0] - 2026-10-26
 
 Answers: questions are answered from the passages, with cited sources.

@@ -11,7 +11,7 @@ everything locally keeps it free and private.
 The first dataset covers pirates and antiquity, with a focus on Europe.
 
 > **Status:** early development. Questions are answered from the indexed
-> articles on the command line; a simple UI comes next.
+> articles, on the command line or in a local web UI.
 
 ## How it works
 
@@ -102,6 +102,18 @@ ollama pull qwen3.5:4b
 
 Exit code `2` means something to set up: no index, Ollama not running or the
 model not downloaded; the message says which.
+
+### Web UI
+
+```bash
+uv run python -m ragnosis serve
+```
+
+Then open <http://localhost:8000>. Type a question; the answer appears as it is
+written and the cited sources link to Wikipedia. The models load once when the
+server starts (about half a minute), and one question is answered at a time.
+`--port N` picks another port. The server only listens on this computer and
+the page loads nothing from the internet. Stop it with Ctrl+C.
 
 ### Settings
 
