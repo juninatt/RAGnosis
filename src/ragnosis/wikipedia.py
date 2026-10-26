@@ -16,6 +16,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.metadata import version
 from types import TracebackType
 from typing import Any
 
@@ -25,7 +26,8 @@ from ragnosis.settings import is_valid_language
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "RAGnosis/0.1 (https://github.com/juninatt/RAGnosis)"
+# The version comes from the installed package so it follows every release.
+USER_AGENT = f"RAGnosis/{version('ragnosis')} (https://github.com/juninatt/RAGnosis)"
 TIMEOUT_SECONDS = 30.0
 # Rate limiting and temporary server trouble; anything else will not improve by retrying.
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})

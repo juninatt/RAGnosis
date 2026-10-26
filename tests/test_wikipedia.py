@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import tomllib
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -19,6 +21,7 @@ from ragnosis.wikipedia import (
 )
 
 FIXED_TIME = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
+REPO_ROOT = Path(__file__).resolve().parents[1]
 Handler = Callable[[httpx.Request], httpx.Response]
 
 
@@ -94,6 +97,13 @@ def test_sends_expected_request() -> None:
     assert params["redirects"] == "1"
     assert params["explaintext"] == "1"
     assert params["formatversion"] == "2"
+
+
+def test_user_agent_carries_the_released_version_and_contact() -> None:
+    # Wikimedia asks clients to identify themselves and how to reach the operator.
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert USER_AGENT.startswith(f"RAGnosis/{pyproject['project']['version']} ")
+    assert "https://github.com/juninatt/RAGnosis" in USER_AGENT
 
 
 def test_redirect_returns_the_target_title() -> None:
