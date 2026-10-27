@@ -22,10 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0  # all tags, so older ones can be read
       - uses: astral-sh/setup-uv@v7
       - name: Release notes from CHANGELOG.md
-        run: uv run --no-project python tools/release_notes.py "$TAG" --output notes.md
+        # The tool runs from this commit, but reads the files as they were at the
+        # tag: an older tag may predate the tool itself.
+        run: |
+          git show "$TAG:CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.md"
+          git show "$TAG:pyproject.toml" > "$RUNNER_TEMP/pyproject.toml"
+          uv run --no-project python tools/release_notes.py "$TAG" \
+            --changelog "$RUNNER_TEMP/CHANGELOG.md" \
+            --pyproject "$RUNNER_TEMP/pyproject.toml" \
+            --output notes.md
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
