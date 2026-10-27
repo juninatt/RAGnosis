@@ -38,7 +38,7 @@ addopts = ["-ra", "--strict-markers", "-m", "not integration"]
 markers = ["integration: talks to real external services; deselected by default"]
 
 [tool.coverage.run]
-source = ["ragnosis"]
+source = ["ragnosis", "tools"]
 branch = true
 
 [tool.coverage.report]
@@ -55,7 +55,7 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "N", "PT", "T20"]
 
 [tool.mypy]
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "tools"]
 
 # Take PyTorch from its CPU-only index: the default Linux wheels bundle several GB of
 # CUDA libraries that are useless without an NVIDIA GPU (see docs/decisions/0005).

@@ -144,6 +144,10 @@ the tools as modules avoids that: `uv run python -m pytest` and
 - **Weekly checks** run CI plus the integration tests against the real
   Wikipedia API and embedding model every Monday, to catch outside changes.
   Start them by hand under *Actions → Weekly checks → Run workflow*.
+- **Releases:** pushing a tag such as `v0.5.0` publishes a GitHub release with
+  that version's `CHANGELOG.md` section, after checking that the tag matches
+  the version in `pyproject.toml`. *Actions → Release → Run workflow* does the
+  same for an existing tag.
 
 ### Conventions
 
