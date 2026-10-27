@@ -141,6 +141,9 @@ the tools as modules avoids that: `uv run python -m pytest` and
 
 - **Dependabot** opens a pull request every Monday when newer versions of the
   Python packages or the GitHub Actions are out; CI tests each one.
+- **Weekly checks** run CI plus the integration tests against the real
+  Wikipedia API and embedding model every Monday, to catch outside changes.
+  Start them by hand under *Actions → Weekly checks → Run workflow*.
 
 ### Conventions
 

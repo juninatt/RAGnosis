@@ -1,0 +1,31 @@
+name: Weekly checks
+
+# Catches what changes without a commit: new runner images, and the real
+# Wikipedia API and embedding model that unit tests replace with fakes.
+# Ollama is left out: a GitHub runner is too slow for the language model.
+on:
+  schedule:
+    - cron: "0 5 * * 1"  # Mondays 05:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: huggingface-${{ hashFiles('.env') }}
+      - name: Integration tests against Wikipedia and the embedding model
+        run: >
+          uv run pytest -m integration
+          tests/test_wikipedia_integration.py
+          tests/test_embeddings_integration.py
