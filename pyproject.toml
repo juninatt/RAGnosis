@@ -18,17 +18,17 @@ ragnosis = "ragnosis.cli:main"
 
 [dependency-groups]
 dev = [
-    "hypothesis>=6.100",
+    "hypothesis>=6.170.9",
     "mypy>=1.11",
     "pytest>=8.3",
     "pytest-cov>=5.0",
-    "ruff>=0.6",
+    "ruff>=0.17.2",
 ]
 
 # uv's own backend builds without starting Python, which Windows Smart App Control
 # can block when it runs from a temporary build folder.
 [build-system]
-requires = ["uv_build>=0.13,<0.14"]
+requires = ["uv_build>=0.13.5,<0.14"]
 build-backend = "uv_build"
 
 [tool.pytest.ini_options]
