@@ -1,0 +1,28 @@
+# Weekly pull requests for newer dependency versions; CI tests each one.
+# Updates are grouped so a normal week brings one pull request per ecosystem.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      python-packages:
+        patterns: ["*"]
+    commit-message:
+      # Gives "build(deps): ..." and "build(deps-dev): ...", our commit convention.
+      prefix: "build"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+      include: "scope"

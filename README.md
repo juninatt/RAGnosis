@@ -137,6 +137,11 @@ launchers that uv creates can be blocked because they are unsigned. Running
 the tools as modules avoids that: `uv run python -m pytest` and
 `uv run python -m mypy` accept the same options.
 
+### Automation on GitHub
+
+- **Dependabot** opens a pull request every Monday when newer versions of the
+  Python packages or the GitHub Actions are out; CI tests each one.
+
 ### Conventions
 
 - **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/)
