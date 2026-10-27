@@ -148,6 +148,8 @@ the tools as modules avoids that: `uv run python -m pytest` and
   that version's `CHANGELOG.md` section, after checking that the tag matches
   the version in `pyproject.toml`. *Actions → Release → Run workflow* does the
   same for an existing tag.
+- **Commit subjects** are checked on every push and pull request
+  (`tools/check_commits.py`): `type(scope): description`, at most 72 characters.
 
 ### Conventions
 
