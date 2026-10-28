@@ -1,7 +1,7 @@
 # RAGnosis
 
 A free, local RAG (retrieval-augmented generation) assistant grounded in
-Wikipedia and Wikidata.
+Wikipedia.
 
 Ask a question and RAGnosis finds the relevant Wikipedia passages, then has a
 local language model answer from those passages, citing them. Grounding answers
@@ -10,8 +10,9 @@ everything locally keeps it free and private.
 
 The first dataset covers pirates and antiquity, with a focus on Europe.
 
-> **Status:** early development. Questions are answered from the indexed
-> articles, on the command line or in a local web UI.
+> **Status:** stable. Questions are answered from the indexed articles, on the
+> command line or in a local web UI. What stays compatible within 1.x is in
+> [decision 0009](docs/decisions/0009-what-1-0-promises.md).
 
 ## How it works
 

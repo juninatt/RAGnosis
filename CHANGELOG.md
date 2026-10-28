@@ -2,8 +2,9 @@
 
 Notable changes per release. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/): until 1.0.0, commands, settings and
-the index format may still change between minor versions.
+[Semantic Versioning](https://semver.org/). From 1.0.0, what stays compatible
+is set by [decision 0009](docs/decisions/0009-what-1-0-promises.md); before
+it, commands, settings and the index format changed between minor versions.
 
 ## [0.6.0] - 2026-10-28
 
