@@ -92,6 +92,8 @@ Retrieves the best passages and has a local language model answer from them,
 citing them as `[1]`, `[2]`; the cited sources are listed after the answer. The
 answer appears as it is written; on a laptop CPU a full answer takes about a
 minute. `-k N` sets how many passages the model reads (default 4).
+`--detailed` asks for a paragraph or two instead of at most five sentences;
+the first words come as soon, the whole answer 10 to 15 seconds later.
 
 Needs [Ollama](https://ollama.com) running and the model in
 `RAGNOSIS_LLM_MODEL` downloaded once:
@@ -125,10 +127,10 @@ Answers the known questions in [`evaluation/answers.toml`](evaluation/answers.to
 with the real models and checks each answer: does it cite the right article,
 mention the expected facts, use the question's language, or decline when the
 sources do not cover the question? Prints PASS or FAIL per question with the
-reasons, and a summary. `--case ID` runs only some questions. A full run takes
-10 to 15 minutes. Compare runs before and after a change: answers are
-reproducible, so a difference comes from the change. Results so far are in
-[`docs/evaluation.md`](docs/evaluation.md).
+reasons, and a summary. `--case ID` runs only some questions, and `--detailed`
+scores detailed answers. A full run takes 10 to 15 minutes. Compare runs before
+and after a change: answers are reproducible, so a difference comes from the
+change. Results so far are in [`docs/evaluation.md`](docs/evaluation.md).
 
 ### Settings
 

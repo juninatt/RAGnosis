@@ -16,7 +16,7 @@ from factories import FakeChatModel, FakeEmbedder, make_article, make_chunk
 from starlette.testclient import TestClient
 
 from ragnosis import cli
-from ragnosis.answer import Answer
+from ragnosis.answer import LENGTH_RULES, Answer, AnswerLength
 from ragnosis.article_store import ArticleStore
 from ragnosis.evaluation import Case, Verdict
 from ragnosis.llm import LLMError, LLMUnavailableError, Message, ModelNotFoundError
@@ -340,6 +340,8 @@ class FakeOllama(FakeChatModel):
     load_error: Exception | None = None
     # Shared with FakeUvicorn, so tests can see what happened in which order.
     events: list[str] = []
+    # The system message of every chat, to see which instructions were sent.
+    systems: list[str] = []
 
     def __init__(self, model: str, base_url: str, *, keep_alive: str = "30m") -> None:
         super().__init__(*self.reply)
@@ -362,6 +364,7 @@ class FakeOllama(FakeChatModel):
         self, messages: Sequence[Message], *, temperature: float = 0.2
     ) -> Iterator[str]:
         self.events.append("chat")
+        self.systems.append(messages[0].content)
         yield from super().stream_chat(messages, temperature=temperature)
         if self.error:
             raise self.error
@@ -376,6 +379,7 @@ def indexed(project_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(FakeOllama, "created", [])
     monkeypatch.setattr(FakeOllama, "keep_alives", [])
     monkeypatch.setattr(FakeOllama, "events", [])
+    monkeypatch.setattr(FakeOllama, "systems", [])
     return project_dir
 
 
@@ -414,6 +418,30 @@ def test_query_rewrite_setting_decides_whether_a_swedish_question_is_rewritten(
     write(indexed / ".env", setting)
     cli.main(["ask", "Vem var Anne Bonny?"])
     assert FakeOllama.events.count("chat") == chats
+
+
+@pytest.mark.parametrize(
+    ("options", "length"),
+    [([], "short"), (["--detailed"], "detailed")],
+    ids=["default", "detailed"],
+)
+def test_ask_answers_short_unless_detailed_is_asked_for(
+    indexed: Path, options: list[str], length: AnswerLength
+) -> None:
+    cli.main(["ask", "Who was Anne Bonny?", *options])
+    assert LENGTH_RULES[length] in FakeOllama.systems[-1]
+
+
+@pytest.mark.parametrize(
+    ("options", "length"),
+    [([], "short"), (["--detailed"], "detailed")],
+    ids=["default", "detailed"],
+)
+def test_evaluate_answers_at_the_chosen_length(
+    cases_file: Path, options: list[str], length: AnswerLength
+) -> None:
+    cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-en", *options])
+    assert LENGTH_RULES[length] in FakeOllama.systems[-1]
 
 
 @pytest.mark.parametrize(("setting", "chats"), [("", 2), ("RAGNOSIS_QUERY_REWRITE=swedish\n", 1)])

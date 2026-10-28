@@ -19,7 +19,7 @@ from pathlib import Path
 
 import uvicorn
 
-from ragnosis.answer import DEFAULT_K, Answer, ask
+from ragnosis.answer import DEFAULT_K, Answer, AnswerLength, ask
 from ragnosis.article_store import ArticleStore
 from ragnosis.embeddings import SentenceTransformerEmbedder
 from ragnosis.env import load_env
@@ -43,6 +43,7 @@ EXIT_USAGE = 2
 PREVIEW_CHARS = 240
 SERVE_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
+DETAILED_HELP = "answer in a paragraph or two instead of at most 5 sentences"
 
 # Times each evaluated answer; tests replace it with a fake clock.
 _clock: Callable[[], float] = time.monotonic
@@ -100,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_K,
         help=f"number of passages the model reads (default: {DEFAULT_K})",
     )
+    ask_parser.add_argument("--detailed", action="store_true", help=DETAILED_HELP)
 
     serve_parser = commands.add_parser("serve", help="start the web UI on this computer")
     serve_parser.add_argument(
@@ -122,6 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="ID",
         help="run only this case; repeat for several",
     )
+    evaluate_parser.add_argument("--detailed", action="store_true", help=DETAILED_HELP)
     return parser
 
 
@@ -148,10 +151,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "search":
         return run_search(settings, query=args.query, k=args.k)
     if args.command == "ask":
-        return run_ask(settings, question=args.question, k=args.k)
+        return run_ask(settings, question=args.question, k=args.k, length=_length(args))
     if args.command == "serve":
         return run_serve(settings, port=args.port)
-    return run_evaluate(settings, cases_file=args.cases, only=args.only)
+    return run_evaluate(settings, cases_file=args.cases, only=args.only, length=_length(args))
+
+
+def _length(args: argparse.Namespace) -> AnswerLength:
+    return "detailed" if args.detailed else "short"
 
 
 def run_ingest(settings: Settings, *, topics: Path | None, refresh: bool) -> int:
@@ -220,7 +227,7 @@ def run_search(settings: Settings, *, query: str, k: int) -> int:
     return EXIT_OK
 
 
-def run_ask(settings: Settings, *, question: str, k: int) -> int:
+def run_ask(settings: Settings, *, question: str, k: int, length: AnswerLength = "short") -> int:
     if not question.strip():
         logger.error("The question must not be blank")
         return EXIT_USAGE
@@ -243,6 +250,7 @@ def run_ask(settings: Settings, *, question: str, k: int) -> int:
                 llm=llm,
                 k=k,
                 rewrite=settings.query_rewrite,
+                length=length,
                 on_text=_show,
             )
     except (LLMUnavailableError, ModelNotFoundError) as exc:
@@ -290,7 +298,13 @@ def run_serve(settings: Settings, *, port: int) -> int:
     return EXIT_OK
 
 
-def run_evaluate(settings: Settings, *, cases_file: Path, only: list[str] | None) -> int:
+def run_evaluate(
+    settings: Settings,
+    *,
+    cases_file: Path,
+    only: list[str] | None,
+    length: AnswerLength = "short",
+) -> int:
     """Answer each known question with the real models and print a scorecard.
 
     Compare scorecards from before and after a change (docs/decisions/0008).
@@ -330,6 +344,7 @@ def run_evaluate(settings: Settings, *, cases_file: Path, only: list[str] | None
                     embedder=embedder,
                     llm=llm,
                     rewrite=settings.query_rewrite,
+                    length=length,
                 )
             except (LLMUnavailableError, ModelNotFoundError) as exc:
                 logger.error("%s", exc)
