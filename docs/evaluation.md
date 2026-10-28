@@ -9,6 +9,26 @@ results here, newest first.
 Times depend on the machine and what else runs on it; compare them only within
 one table.
 
+## 2026-10-28: short and detailed answers (0.5.0)
+
+Same setup as below, rewriting `always`. `evaluate --detailed` asks for one or
+two paragraphs of 6 to 10 sentences instead of at most 5 sentences.
+
+| Answer length | Passed | Median per answer | Total |
+|---|---|---|---|
+| short (default) | 15 / 16 | 44 s | 13.8 min |
+| detailed | 14 / 16 | 41 s | 11.5 min |
+
+- Facts, citations and language held up in detailed answers.
+- **world-cup-sv fails in detailed mode only:** the answer correctly says it
+  cannot answer, then retells what the sources are about and cites them, so
+  the page would list four unrelated sources under a refusal. A prompt rule
+  against citing or describing the sources did not stop it; a fix in code is
+  planned.
+- The machine's speed varied between runs more than the answer length did, so
+  the medians do not show the cost. One detailed answer in the web UI took 56 s
+  against about 35 to 45 s for short ones; the first words come as soon.
+
 ## 2026-10-27/28: rewriting questions for search (0.5.0)
 
 **Setup:** `qwen3.5:4b` through Ollama, `intfloat/multilingual-e5-small`, 4
