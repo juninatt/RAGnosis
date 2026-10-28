@@ -11,8 +11,10 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ragnosis.answer import (
+    ANSWER_LENGTHS,
     ANSWER_TEMPERATURE,
     DEFAULT_K,
+    LENGTH_RULES,
     MAX_QUERY_CHARS,
     NO_PASSAGES_TEXT,
     REWRITE_EXAMPLES,
@@ -102,7 +104,7 @@ def test_prompt_has_instructions_then_numbered_sources_and_question() -> None:
     )
 
     assert [m.role for m in messages] == ["system", "user"]
-    assert messages[0].content == f"{SYSTEM_PROMPT} {SAME_LANGUAGE_RULE}"
+    assert messages[0].content == f"{SYSTEM_PROMPT} {LENGTH_RULES['short']} {SAME_LANGUAGE_RULE}"
     assert messages[1].content == (
         "Sources:\n\n"
         "[1] Blackbeard > Death\nKilled in 1718.\n\n"
@@ -156,13 +158,44 @@ def test_does_not_mistake_other_languages_for_swedish(question: str) -> None:
 
 def test_swedish_questions_are_told_to_answer_in_swedish() -> None:
     prompt = system_prompt("Vem var Anne Bonny?")
-    assert prompt == f"{SYSTEM_PROMPT} {SWEDISH_RULE}"
+    assert prompt == f"{SYSTEM_PROMPT} {LENGTH_RULES['short']} {SWEDISH_RULE}"
     assert "Swedish" in prompt
     assert "Norwegian" in prompt
 
 
 def test_other_questions_keep_the_same_language_rule() -> None:
-    assert system_prompt("Who was Anne Bonny?") == f"{SYSTEM_PROMPT} {SAME_LANGUAGE_RULE}"
+    assert (
+        system_prompt("Who was Anne Bonny?")
+        == f"{SYSTEM_PROMPT} {LENGTH_RULES['short']} {SAME_LANGUAGE_RULE}"
+    )
+
+
+# --- Answer length ---
+
+
+def test_short_is_the_default_length() -> None:
+    assert system_prompt("Who was Anne Bonny?") == system_prompt("Who was Anne Bonny?", "short")
+    assert LENGTH_RULES["short"] == "Be concise: at most 5 sentences."
+
+
+def test_detailed_answers_ask_for_a_paragraph_or_two() -> None:
+    prompt = system_prompt("Who was Anne Bonny?", "detailed")
+    assert prompt == f"{SYSTEM_PROMPT} {LENGTH_RULES['detailed']} {SAME_LANGUAGE_RULE}"
+    assert "6 to 10 sentences" in prompt
+    assert "at most 5 sentences" not in prompt
+
+
+def test_every_length_keeps_the_grounding_and_language_rules() -> None:
+    for length in ANSWER_LENGTHS:
+        prompt = system_prompt("Vem var Anne Bonny?", length)
+        assert prompt.startswith(SYSTEM_PROMPT)
+        assert prompt.endswith(SWEDISH_RULE)
+
+
+def test_ask_passes_the_length_to_the_prompt(store: VectorStore, embedder: FakeEmbedder) -> None:
+    llm = ScriptedChatModel("Teach was killed at Ocracoke [1].")
+    ask("Where was Teach killed?", store=store, embedder=embedder, llm=llm, length="detailed")
+    assert LENGTH_RULES["detailed"] in llm.prompts[0][0].content
 
 
 def test_prompt_for_a_swedish_question_carries_the_swedish_rule() -> None:

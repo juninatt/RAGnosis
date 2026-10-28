@@ -12,7 +12,7 @@ import logging
 import re
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from ragnosis.embeddings import Embedder
 from ragnosis.llm import Message
@@ -32,9 +32,19 @@ ANSWER_TEMPERATURE = 0.0
 SYSTEM_PROMPT = (
     "You answer questions using only the numbered sources given. "
     "Cite every claim with the source number in brackets, like [1] or [2][3]. "
-    "If the sources do not contain the answer, say that you cannot answer from the sources. "
-    "Be concise: at most 5 sentences."
+    "If the sources do not contain the answer, say that you cannot answer from the sources."
 )
+# The reader chooses how long an answer is. A detailed one takes 10 to 15
+# seconds longer in total, but starts as soon and is written faster than read.
+AnswerLength = Literal["short", "detailed"]
+ANSWER_LENGTHS: tuple[AnswerLength, ...] = ("short", "detailed")
+LENGTH_RULES: dict[AnswerLength, str] = {
+    "short": "Be concise: at most 5 sentences.",
+    "detailed": (
+        "Answer in one or two short paragraphs, about 6 to 10 sentences, "
+        "with the most important facts first."
+    ),
+}
 # Asked to answer "in the question's language", the model answered Swedish
 # questions in Norwegian or English; naming the language fixes that (0006).
 SAME_LANGUAGE_RULE = "Answer in the same language as the question."
@@ -92,10 +102,10 @@ def is_swedish(question: str) -> bool:
     return "ä" in text or "ö" in text or any(w in _SWEDISH_WORDS for w in _WORD.findall(text))
 
 
-def system_prompt(question: str) -> str:
-    """The instructions, with the rule for which language to answer in."""
-    rule = SWEDISH_RULE if is_swedish(question) else SAME_LANGUAGE_RULE
-    return f"{SYSTEM_PROMPT} {rule}"
+def system_prompt(question: str, length: AnswerLength = "short") -> str:
+    """The instructions, with the rules for how long and in which language to answer."""
+    language_rule = SWEDISH_RULE if is_swedish(question) else SAME_LANGUAGE_RULE
+    return f"{SYSTEM_PROMPT} {LENGTH_RULES[length]} {language_rule}"
 
 
 class ChatModel(Protocol):
@@ -138,14 +148,16 @@ def cited_numbers(text: str, count: int) -> list[int]:
     return numbers
 
 
-def build_messages(question: str, passages: Sequence[SearchResult]) -> list[Message]:
+def build_messages(
+    question: str, passages: Sequence[SearchResult], length: AnswerLength = "short"
+) -> list[Message]:
     """The prompt: instructions, then the numbered passages and the question."""
     sources = "\n\n".join(
         f"[{number}] {result.chunk.article_title} > {result.chunk.section}\n{result.chunk.text}"
         for number, result in enumerate(passages, start=1)
     )
     return [
-        Message("system", system_prompt(question)),
+        Message("system", system_prompt(question, length)),
         Message("user", f"Sources:\n\n{sources}\n\nQuestion: {question}"),
     ]
 
@@ -183,12 +195,14 @@ def ask(
     llm: ChatModel,
     k: int = DEFAULT_K,
     rewrite: RewriteMode = "never",
+    length: AnswerLength = "short",
     on_text: Callable[[str], None] | None = None,
 ) -> Answer:
     """Retrieve the ``k`` best passages and have ``llm`` answer from them.
 
     With ``rewrite``, the passages are found with an English search query the
     model writes first; the answer is still written for the original question.
+    ``length`` asks for a short answer or a detailed one of a paragraph or two.
     ``on_text`` receives the answer piece by piece while it is written, so a
     caller can show it immediately instead of after the whole minute.
 
@@ -214,7 +228,7 @@ def ask(
 
     pieces: list[str] = []
     for piece in llm.stream_chat(
-        build_messages(question, passages), temperature=ANSWER_TEMPERATURE
+        build_messages(question, passages, length), temperature=ANSWER_TEMPERATURE
     ):
         pieces.append(piece)
         if on_text:
