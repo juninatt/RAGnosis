@@ -166,12 +166,26 @@ def check(case: Case, answer: Answer) -> Verdict:
     return Verdict(case, answer, problems)
 
 
-def load_cases(path: Path) -> list[Case]:
-    """Read and validate the cases in a TOML file of ``[[case]]`` tables."""
+@dataclass(frozen=True)
+class Scorecard:
+    """The known questions, and how many must pass for a release (0009)."""
+
+    cases: list[Case]
+    required: int
+
+
+def load_scorecard(path: Path) -> Scorecard:
+    """Read and validate a TOML file of ``[[case]]`` tables and an optional ``required``.
+
+    Without ``required``, every case must pass.
+    """
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:
         raise CaseError(f"{path} is not valid TOML: {exc}") from exc
+    unknown = set(data) - {"required", "case"}
+    if unknown:
+        raise CaseError(f"{path} has unknown settings {sorted(unknown)}")
     tables = data.get("case")
     if not isinstance(tables, list) or not tables:
         raise CaseError(f"{path} has no [[case]] tables")
@@ -181,7 +195,18 @@ def load_cases(path: Path) -> list[Case]:
     duplicates = sorted({i for i in ids if ids.count(i) > 1})
     if duplicates:
         raise CaseError(f"Duplicate case ids: {duplicates}")
-    return cases
+
+    required = data.get("required", len(cases))
+    if not isinstance(required, int) or isinstance(required, bool):
+        raise CaseError(f"'required' must be a whole number, not {required!r}")
+    if not 1 <= required <= len(cases):
+        raise CaseError(f"'required' must be from 1 to the {len(cases)} cases, not {required}")
+    return Scorecard(cases, required)
+
+
+def load_cases(path: Path) -> list[Case]:
+    """The validated cases in a scorecard file."""
+    return load_scorecard(path).cases
 
 
 _FIELDS = {"id", "question", "language", "sources", "mentions", "declines"}

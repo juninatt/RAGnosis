@@ -15,6 +15,7 @@ from ragnosis.evaluation import (
     answer_language,
     check,
     load_cases,
+    load_scorecard,
 )
 from ragnosis.vector_store import SearchResult
 
@@ -172,7 +173,7 @@ def test_loads_cases_with_defaults(tmp_path: Path) -> None:
     ("content", "message"),
     [
         ("not = [toml", "not valid TOML"),
-        ("title = 'no cases'\n", "no \\[\\[case\\]\\] tables"),
+        ("required = 1\n", "no \\[\\[case\\]\\] tables"),
         ('[[case]]\nquestion = "Q?"\nlanguage = "en"\nmentions = ["x"]\n', "non-empty 'id'"),
         ('[[case]]\nid = "a"\nquestion = " "\nlanguage = "en"\nmentions = ["x"]\n', "'question'"),
         ('[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "de"\nmentions = ["x"]\n', "language"),
@@ -216,7 +217,51 @@ def test_malformed_cases_are_rejected(tmp_path: Path, content: str, message: str
         load_cases(write(tmp_path, content))
 
 
+# --- Required level ---
+
+TWO_CASES = (
+    '[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\nmentions = ["x"]\n\n'
+    '[[case]]\nid = "b"\nquestion = "R?"\nlanguage = "sv"\ndeclines = true\n'
+)
+
+
+def test_without_required_every_case_must_pass(tmp_path: Path) -> None:
+    scorecard = load_scorecard(write(tmp_path, TWO_CASES))
+    assert scorecard.required == 2
+    assert [case.id for case in scorecard.cases] == ["a", "b"]
+
+
+def test_reads_the_required_level(tmp_path: Path) -> None:
+    assert load_scorecard(write(tmp_path, "required = 1\n" + TWO_CASES)).required == 1
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ("0", "from 1 to the 2 cases, not 0"),
+        ("3", "from 1 to the 2 cases, not 3"),
+        ('"1"', "whole number"),
+        ("true", "whole number"),
+        ("1.5", "whole number"),
+    ],
+)
+def test_rejects_an_impossible_required_level(tmp_path: Path, value: str, message: str) -> None:
+    with pytest.raises(CaseError, match=message):
+        load_scorecard(write(tmp_path, f"required = {value}\n" + TWO_CASES))
+
+
+def test_rejects_unknown_top_level_settings(tmp_path: Path) -> None:
+    with pytest.raises(CaseError, match="unknown settings \\['pass_level'\\]"):
+        load_scorecard(write(tmp_path, "pass_level = 1\n" + TWO_CASES))
+
+
 # --- Guards on the committed cases ---
+
+
+def test_committed_scorecard_requires_14_of_16() -> None:
+    # The level decision 0009 sets; changing it is a decision, not a tweak.
+    scorecard = load_scorecard(REPO_ROOT / DEFAULT_CASES_FILE)
+    assert (scorecard.required, len(scorecard.cases)) == (14, 16)
 
 
 def test_committed_cases_load() -> None:

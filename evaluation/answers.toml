@@ -7,6 +7,10 @@
 #   declines - the sources do not cover the question, so the answer must say so
 # Findings from testing belong here as new cases.
 
+# How many cases a release must pass with the default settings (decision 0009).
+# Two are allowed to fail for known limits of the small model; see CHANGELOG.md.
+required = 14
+
 # --- Pirates ---
 
 [[case]]

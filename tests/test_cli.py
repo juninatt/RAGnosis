@@ -672,7 +672,28 @@ def test_evaluate_prints_a_scorecard_and_fails_when_a_case_fails(
     assert "- is in en, expected sv" in out
     assert "- mentions none of ['irländsk']" in out
     assert "answer: Anne Bonny was an Irish pirate and she sailed with Jack [1]." in out
-    assert out.endswith("\n1 of 2 passed · median 32 s · total 1.1 min\n")
+    assert out.endswith("\n1 of 2 passed, 2 required: NOT met · median 32 s · total 1.1 min\n")
+
+
+def test_full_run_passes_when_it_reaches_the_required_level(
+    cases_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write(cases_file, "required = 1\n" + CASES)
+
+    assert cli.main(["evaluate", "--cases", str(cases_file)]) == cli.EXIT_OK
+
+    assert "1 of 2 passed, 1 required: met" in capsys.readouterr().out
+
+
+def test_chosen_cases_must_all_pass_whatever_the_level(
+    cases_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write(cases_file, "required = 1\n" + CASES)
+
+    code = cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-sv"])
+
+    assert code == cli.EXIT_FAILURES
+    assert "0 of 1 passed, 1 required: NOT met" in capsys.readouterr().out
 
 
 def test_evaluate_passes_when_every_case_passes(
@@ -771,7 +792,7 @@ def test_failed_case_shows_the_rewritten_query(
 
 
 def test_format_summary_without_cases() -> None:
-    assert cli.format_summary([]) == "\nNo cases were run.\n"
+    assert cli.format_summary([], required=1) == "\nNo cases were run.\n"
 
 
 def test_format_verdict_shortens_long_answers() -> None:

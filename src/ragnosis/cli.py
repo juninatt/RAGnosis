@@ -23,7 +23,7 @@ from ragnosis.answer import DEFAULT_K, Answer, AnswerLength, ask
 from ragnosis.article_store import ArticleStore
 from ragnosis.embeddings import SentenceTransformerEmbedder
 from ragnosis.env import load_env
-from ragnosis.evaluation import DEFAULT_CASES_FILE, CaseError, Verdict, check, load_cases
+from ragnosis.evaluation import DEFAULT_CASES_FILE, CaseError, Verdict, check, load_scorecard
 from ragnosis.indexing import update_index
 from ragnosis.ingest import ingest
 from ragnosis.llm import LLMError, LLMUnavailableError, ModelNotFoundError, OllamaClient
@@ -311,18 +311,22 @@ def run_evaluate(
     """Answer each known question with the real models and print a scorecard.
 
     Compare scorecards from before and after a change (docs/decisions/0008).
+    A full run passes when it reaches the cases file's required level (0009);
+    a run of chosen cases passes only when all of them do.
     """
     try:
-        cases = load_cases(cases_file)
+        scorecard = load_scorecard(cases_file)
     except (CaseError, OSError) as exc:
         logger.error("Cannot read cases: %s", exc)
         return EXIT_USAGE
+    cases, required = scorecard.cases, scorecard.required
     if only:
         unknown = sorted(set(only) - {case.id for case in cases})
         if unknown:
             logger.error("Unknown case ids: %s", unknown)
             return EXIT_USAGE
         cases = [case for case in cases if case.id in only]
+        required = len(cases)
 
     if not VectorStore.exists(settings.index_dir):
         logger.error("No index in %s; run index first", settings.index_dir)
@@ -361,8 +365,9 @@ def run_evaluate(
             results.append((verdict, seconds))
             _show(format_verdict(verdict, seconds))
 
-    _show(format_summary(results))
-    return EXIT_OK if all(verdict.passed for verdict, _ in results) else EXIT_FAILURES
+    _show(format_summary(results, required))
+    passed = sum(verdict.passed for verdict, _ in results)
+    return EXIT_OK if passed >= required else EXIT_FAILURES
 
 
 def format_verdict(verdict: Verdict, seconds: float) -> str:
@@ -379,15 +384,16 @@ def format_verdict(verdict: Verdict, seconds: float) -> str:
     return line + details + f"      answer: {preview or '(none)'}\n"
 
 
-def format_summary(results: Sequence[tuple[Verdict, float]]) -> str:
-    """How many passed, and typical and total time."""
+def format_summary(results: Sequence[tuple[Verdict, float]], required: int) -> str:
+    """How many passed against how many must, and typical and total time."""
     if not results:
         return "\nNo cases were run.\n"
     passed = sum(verdict.passed for verdict, _ in results)
     seconds = [s for _, s in results]
+    level = "met" if passed >= required else "NOT met"
     return (
-        f"\n{passed} of {len(results)} passed · median {statistics.median(seconds):.0f} s"
-        f" · total {sum(seconds) / 60:.1f} min\n"
+        f"\n{passed} of {len(results)} passed, {required} required: {level}"
+        f" · median {statistics.median(seconds):.0f} s · total {sum(seconds) / 60:.1f} min\n"
     )
 
 

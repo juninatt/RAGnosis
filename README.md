@@ -130,7 +130,9 @@ with the real models and checks each answer: does it cite the right article,
 mention the expected facts, use the question's language, or decline when the
 sources do not cover the question? Prints PASS or FAIL per question with the
 reasons, and a summary. `--case ID` runs only some questions, and `--detailed`
-scores detailed answers. A full run takes 10 to 15 minutes. Compare runs before
+scores detailed answers. A full run passes (exit code 0) when it reaches the
+`required` level in the cases file, 14 of 16; a run of chosen cases passes
+when all of them do. A full run takes 10 to 15 minutes. Compare runs before
 and after a change: answers are reproducible, so a difference comes from the
 change. Results so far are in [`docs/evaluation.md`](docs/evaluation.md).
 
