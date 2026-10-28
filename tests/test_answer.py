@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from factories import FakeChatModel, FakeEmbedder, make_chunk
+from factories import FakeChatModel, FakeEmbedder, ScriptedChatModel, make_chunk
 from hypothesis import given
 from hypothesis import strategies as st
 
 from ragnosis.answer import (
+    ANSWER_TEMPERATURE,
     DEFAULT_K,
     NO_PASSAGES_TEXT,
     SAME_LANGUAGE_RULE,
@@ -258,6 +259,14 @@ def test_works_without_a_callback_on_an_empty_index(embedder: FakeEmbedder) -> N
     empty = VectorStore(embedder.model_name, embedder.dimension)
     answer = ask("Teach?", store=empty, embedder=embedder, llm=FakeChatModel())
     assert answer.text == NO_PASSAGES_TEXT
+
+
+def test_answers_are_written_with_temperature_zero(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    llm = ScriptedChatModel("Han dödades [1].")
+    ask("Where was Teach killed?", store=store, embedder=embedder, llm=llm)
+    assert llm.temperatures == [ANSWER_TEMPERATURE] == [0.0]
 
 
 def test_model_errors_reach_the_caller(store: VectorStore, embedder: FakeEmbedder) -> None:

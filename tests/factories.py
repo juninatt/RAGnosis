@@ -101,3 +101,19 @@ class FakeChatModel:
     ) -> Iterator[str]:
         self.prompts.append(list(messages))
         yield from self.pieces
+
+
+class ScriptedChatModel:
+    """Gives each call the next reply in order, e.g. a rewritten query and then an answer."""
+
+    def __init__(self, *replies: str) -> None:
+        self.replies = list(replies)
+        self.prompts: list[list[Message]] = []
+        self.temperatures: list[float] = []
+
+    def stream_chat(
+        self, messages: Sequence[Message], *, temperature: float = 0.2
+    ) -> Iterator[str]:
+        self.prompts.append(list(messages))
+        self.temperatures.append(temperature)
+        yield self.replies.pop(0)

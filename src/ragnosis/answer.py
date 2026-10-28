@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # (about 50 tokens a second). Four found a relevant passage for as many known
 # questions as five did, with a fifth less to read; three missed one.
 DEFAULT_K = 4
+# The answer should restate the sources, not vary from run to run; with
+# temperature 0 the model always picks its most likely next word (0008).
+ANSWER_TEMPERATURE = 0.0
 
 SYSTEM_PROMPT = (
     "You answer questions using only the numbered sources given. "
@@ -152,7 +155,9 @@ def ask(
         return Answer(question, NO_PASSAGES_TEXT, [])
 
     pieces: list[str] = []
-    for piece in llm.stream_chat(build_messages(question, passages)):
+    for piece in llm.stream_chat(
+        build_messages(question, passages), temperature=ANSWER_TEMPERATURE
+    ):
         pieces.append(piece)
         if on_text:
             on_text(piece)

@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from ragnosis.llm import (
+    SEED,
     LLMError,
     LLMUnavailableError,
     Message,
@@ -90,11 +91,24 @@ def test_sends_model_messages_and_disables_thinking() -> None:
     assert body["stream"] is True
     assert body["think"] is False
     assert body["keep_alive"] == "30m"
-    assert body["options"] == {"temperature": 0.5}
+    assert body["options"] == {"temperature": 0.5, "seed": SEED}
     assert body["messages"] == [
         {"role": "system", "content": "Answer briefly."},
         {"role": "user", "content": "Who was Blackbeard?"},
     ]
+
+
+def test_every_request_uses_the_same_seed() -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, content=ndjson(DONE))
+
+    with make_client(handler) as client:
+        client.chat(MESSAGES)
+        client.chat(MESSAGES, temperature=0.0)
+    assert [body["options"]["seed"] for body in bodies] == [SEED, SEED]
 
 
 def test_sends_the_configured_keep_alive() -> None:

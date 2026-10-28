@@ -22,6 +22,9 @@ TIMEOUT_SECONDS = 600.0
 # Ollama's own default is 5 minutes, after which the next question pays for
 # loading the model again.
 DEFAULT_KEEP_ALIVE = "30m"
+# A fixed seed makes the same prompt give the same reply, so a change in the
+# answers can be told apart from chance when they are measured (0008).
+SEED = 42
 
 
 class LLMError(RuntimeError):
@@ -94,7 +97,7 @@ class OllamaClient:
             "stream": True,
             "think": False,
             "keep_alive": self.keep_alive,
-            "options": {"temperature": temperature},
+            "options": {"temperature": temperature, "seed": SEED},
             "messages": [{"role": m.role, "content": m.content} for m in messages],
         }
         try:
