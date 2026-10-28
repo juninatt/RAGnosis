@@ -6,6 +6,23 @@ Notable changes per release. The format follows
 is set by [decision 0009](docs/decisions/0009-what-1-0-promises.md); before
 it, commands, settings and the index format changed between minor versions.
 
+## [1.0.0] - 2026-10-28
+
+First stable release: 0.6.0 passed the test period without new problems.
+
+### Changed
+
+- The commands, exit codes, settings, web API and data on disk are now
+  stable within 1.x, as decision 0009 sets out.
+- The description no longer mentions Wikidata, which is not used yet.
+
+### Known issues
+
+- Names translated into Swedish, such as "Svartskägg" for Blackbeard, are not
+  found.
+- An answer that declines may go on to cite unrelated sources.
+- An answer takes 30 to 60 seconds on a laptop CPU.
+
 ## [0.6.0] - 2026-10-28
 
 Release candidate for 1.0: what 1.0 promises, and a guide for new users.
@@ -119,6 +136,7 @@ First working pipeline step: articles from Wikipedia.
   (pirates and antiquity in Europe) as plain text.
 - Settings in env files, central logging, and CI on Linux and Windows.
 
+[1.0.0]: https://github.com/juninatt/RAGnosis/releases/tag/v1.0.0
 [0.6.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.6.0
 [0.5.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.5.0
 [0.4.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.4.0
