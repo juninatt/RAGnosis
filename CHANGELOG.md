@@ -5,6 +5,32 @@ Notable changes per release. The format follows
 [Semantic Versioning](https://semver.org/): until 1.0.0, commands, settings and
 the index format may still change between minor versions.
 
+## [0.5.0] - 2026-10-28
+
+Better answers: questions are rewritten for search, and answers are measured.
+
+### Added
+
+- `evaluate` command: answers 16 known questions in Swedish and English and
+  checks each answer's sources, facts and language, and that it declines when
+  it should. Results are kept in `docs/evaluation.md`.
+- Short or detailed answers: a choice in the web UI, remembered in the
+  browser, and `--detailed` for `ask` and `evaluate`.
+
+### Changed
+
+- Questions are rewritten into English search keywords before searching
+  (`RAGNOSIS_QUERY_REWRITE`, default `always`): 15 of 16 known questions now
+  pass, against 12 of 16 without rewriting. It adds about 6 seconds a question.
+- Answers are reproducible: the same question and sources give the same
+  answer (temperature 0 and a fixed seed).
+
+### Known issues
+
+- Names translated into Swedish, such as "Svartskägg" for Blackbeard, are not
+  found; storing Swedish article names in the index is planned.
+- A detailed answer that declines may go on to cite unrelated sources.
+
 ## [0.4.0] - 2026-10-26
 
 Web UI: ask in the browser, with answers that start sooner.
@@ -68,6 +94,7 @@ First working pipeline step: articles from Wikipedia.
   (pirates and antiquity in Europe) as plain text.
 - Settings in env files, central logging, and CI on Linux and Windows.
 
+[0.5.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.5.0
 [0.4.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.4.0
 [0.3.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.3.0
 [0.2.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.2.0
