@@ -138,7 +138,21 @@ change. Results so far are in [`docs/evaluation.md`](docs/evaluation.md).
 
 ### Settings
 
-All settings are listed with their defaults in [`.env`](.env).
+Settings are environment variables. Their defaults are in [`.env`](.env); put
+your own values in `.env.local`, which git ignores and which overrides `.env`.
+Real environment variables override both.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `RAGNOSIS_LOG_LEVEL` | `INFO` | How much the commands log: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. |
+| `RAGNOSIS_DATA_DIR` | `data` | Where downloaded articles and the index are kept. |
+| `RAGNOSIS_TOPICS_FILE` | `topics/pirates-and-antiquity-europe.txt` | The list of Wikipedia titles that makes up the corpus. |
+| `RAGNOSIS_WIKI_LANGUAGE` | `en` | The Wikipedia language edition the titles are from. |
+| `RAGNOSIS_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | The model that turns text into vectors. Changing it needs `index --rebuild`. |
+| `RAGNOSIS_OLLAMA_URL` | `http://localhost:11434` | Where Ollama runs. |
+| `RAGNOSIS_LLM_MODEL` | `qwen3.5:4b` | The model that writes answers; download it with `ollama pull`. |
+| `RAGNOSIS_LLM_KEEP_ALIVE` | `30m` | How long Ollama keeps the model loaded after an answer, e.g. `30m`, `1h`, or `-1` for always. |
+| `RAGNOSIS_QUERY_REWRITE` | `always` | When questions are rewritten into English search keywords: `always`, `swedish` or `never`. |
 
 ## Development
 
