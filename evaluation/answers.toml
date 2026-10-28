@@ -1,0 +1,125 @@
+# Known questions for `python -m ragnosis evaluate` (docs/decisions/0008).
+#
+# Each [[case]] says what a good answer looks like:
+#   sources  - the answer cites at least one passage from one of these articles
+#   mentions - the answer contains at least one of these words (any case)
+#   language - the answer is written in this language ("sv" or "en")
+#   declines - the sources do not cover the question, so the answer must say so
+# Findings from testing belong here as new cases.
+
+# --- Pirates ---
+
+[[case]]
+id = "blackbeard-death-en"
+question = "How did Blackbeard die?"
+language = "en"
+sources = ["Blackbeard"]
+mentions = ["Ocracoke", "Maynard", "1718"]
+
+[[case]]
+id = "blackbeard-death-sv"
+question = "Hur dog Blackbeard?"
+language = "sv"
+sources = ["Blackbeard"]
+mentions = ["Ocracoke", "Maynard", "1718"]
+
+[[case]]
+id = "svartskagg-death-sv"
+question = "Hur dog Svartskägg?"
+language = "sv"
+sources = ["Blackbeard"]
+mentions = ["Ocracoke", "Maynard", "1718"]
+
+[[case]]
+id = "anne-bonny-sv"
+question = "Vem var Anne Bonny?"
+language = "sv"
+sources = ["Anne Bonny", "Calico Jack"]
+mentions = ["Rackham", "Calico Jack", "irländsk", "Irland"]
+
+[[case]]
+id = "mary-read-en"
+question = "Who was Mary Read?"
+language = "en"
+sources = ["Mary Read"]
+mentions = ["Rackham", "Calico Jack", "Anne Bonny"]
+
+[[case]]
+id = "female-pirates-en"
+question = "Which female pirates sailed with Calico Jack?"
+language = "en"
+sources = ["Anne Bonny", "Mary Read", "Calico Jack"]
+mentions = ["Anne Bonny", "Mary Read"]
+
+[[case]]
+id = "jolly-roger-sv"
+question = "Vilken flagga hade pirater?"
+language = "sv"
+sources = ["Jolly Roger"]
+# A correct answer may describe the flag rather than name it.
+mentions = ["Jolly Roger", "dödskalle", "korsben", "Death's Head"]
+
+[[case]]
+id = "barbary-en"
+question = "Where did the Barbary corsairs operate from?"
+language = "en"
+sources = ["Barbary corsairs"]
+mentions = ["Algiers", "Tunis", "Tripoli", "North Africa"]
+
+[[case]]
+id = "stortebeker-sv"
+question = "Vem var Klaus Störtebeker?"
+language = "sv"
+sources = ["Klaus Störtebeker", "Victual Brothers"]
+mentions = ["Vitalie", "Victual", "Hansa", "Östersjön"]
+
+# --- Antiquity ---
+
+[[case]]
+id = "hannibal-alps-en"
+question = "Who led the Carthaginian army across the Alps?"
+language = "en"
+sources = ["Hannibal", "Punic Wars"]
+mentions = ["Hannibal"]
+
+[[case]]
+id = "hannibal-alps-sv"
+question = "Vem ledde den karthagiska armén över Alperna?"
+language = "sv"
+sources = ["Hannibal", "Punic Wars"]
+mentions = ["Hannibal"]
+
+[[case]]
+id = "lex-gabinia-sv"
+question = "Vilken lag gav Pompejus makt att bekämpa pirater?"
+language = "sv"
+sources = ["Lex Gabinia", "Pompey", "Cilician pirates"]
+mentions = ["Gabinia"]
+
+[[case]]
+id = "salamis-en"
+question = "What kind of warship did the Athenians use at Salamis?"
+language = "en"
+sources = ["Trireme", "Battle of Salamis"]
+mentions = ["trireme"]
+
+[[case]]
+id = "western-rome-sv"
+question = "När föll det västromerska riket?"
+language = "sv"
+sources = ["Fall of the Western Roman Empire"]
+mentions = ["476"]
+
+# --- Outside the sources ---
+
+[[case]]
+id = "japan-capital-en"
+question = "What is the capital of Japan?"
+language = "en"
+declines = true
+
+[[case]]
+id = "world-cup-sv"
+question = "Vem vann fotbolls-VM 2022?"
+language = "sv"
+declines = true
