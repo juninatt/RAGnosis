@@ -5,6 +5,30 @@ Notable changes per release. The format follows
 [Semantic Versioning](https://semver.org/): until 1.0.0, commands, settings and
 the index format may still change between minor versions.
 
+## [0.6.0] - 2026-10-28
+
+Release candidate for 1.0: what 1.0 promises, and a guide for new users.
+
+### Added
+
+- Decision 0009 records what stays compatible through 1.x: the commands and
+  exit codes, the `RAGNOSIS_*` settings, the web API and the data on disk.
+- `evaluate` passes when a full run reaches the level set in the cases file,
+  14 of 16 known questions, and exits with `1` when it does not.
+- An installation guide in the README, tried from a clean clone, with a
+  troubleshooting table.
+- A table of every setting with its default; a test keeps it in step with
+  `.env` and the code.
+- `docs/release-checks.md`: the checks before a release and a log of the
+  manual ones.
+
+### Known issues
+
+- Names translated into Swedish, such as "Svartskägg" for Blackbeard, are not
+  found.
+- An answer that declines may go on to cite unrelated sources. Hiding them was
+  tried and removed, as it also hid correct sources.
+
 ## [0.5.0] - 2026-10-28
 
 Better answers: questions are rewritten for search, and answers are measured.
@@ -94,6 +118,7 @@ First working pipeline step: articles from Wikipedia.
   (pirates and antiquity in Europe) as plain text.
 - Settings in env files, central logging, and CI on Linux and Windows.
 
+[0.6.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.6.0
 [0.5.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.5.0
 [0.4.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.4.0
 [0.3.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.3.0
