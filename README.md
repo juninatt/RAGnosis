@@ -25,16 +25,71 @@ The reasons behind the stack are in [docs/decisions](docs/decisions/).
 
 ## Getting started
 
-Requires [uv](https://docs.astral.sh/uv/), which also installs the right Python version.
+From nothing to a first answer takes about half an hour, most of it waiting for
+downloads and the index. Everything runs on your own computer; a laptop with
+16 GB of RAM and no graphics card is enough.
+
+### 1. Install the tools
+
+| Tool | What for | How (Windows) |
+|---|---|---|
+| [uv](https://docs.astral.sh/uv/) | Python, packages and running the commands | `winget install --id=astral-sh.uv -e` |
+| [Ollama](https://ollama.com) | Runs the language model | `winget install --id=Ollama.Ollama -e` |
+| [Git](https://git-scm.com) | Getting the code | `winget install --id=Git.Git -e` |
+| [Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist) | Needed by PyTorch on Windows | `winget install --id=Microsoft.VCRedist.2015+.x64 -e` |
+
+Open a new terminal afterwards, so it finds the new tools. On macOS and Linux,
+install uv, Ollama and Git as their websites describe; the Visual C++ runtime
+is not needed there.
+
+### 2. Get the code and the models
 
 ```bash
+git clone https://github.com/juninatt/RAGnosis.git
+cd RAGnosis
 uv sync
-uv run pytest
+ollama pull qwen3.5:4b
 ```
 
-With Windows Smart App Control on, uv's own Python builds may be blocked
-because they are unsigned. Installing Python 3.12 from python.org and setting
-`python-preference = "system"` in your user `uv.toml` avoids that.
+`uv sync` installs Python 3.12 and the packages (about 1 GB, mostly PyTorch).
+`ollama pull` downloads the language model (3.3 GB).
+
+On Windows, clone into a short folder such as `C:\code` or `Documents`. Some
+package files have long names, and Windows by default refuses paths longer than
+260 characters; a deep folder makes `index` fail (see below).
+
+### 3. Build your copy of the knowledge base
+
+```bash
+uv run python -m ragnosis ingest
+uv run python -m ragnosis index
+```
+
+`ingest` downloads the articles in the topics file from Wikipedia (about a
+minute). `index` splits them into passages and embeds them; the first time it
+also downloads the embedding model (0.5 GB). On a laptop CPU it takes 5 to 15
+minutes, and later runs only redo articles that changed.
+
+### 4. Ask
+
+```bash
+uv run python -m ragnosis serve
+```
+
+Open <http://localhost:8000> and ask a question, in Swedish or English. Or ask
+on the command line: `uv run python -m ragnosis ask "Who was Anne Bonny?"`.
+
+### If something goes wrong
+
+| Symptom | Cause and fix |
+|---|---|
+| `An Application Control policy has blocked this file` | Windows Smart App Control blocks unsigned programs, including uv's own Python. Install Python 3.12 from python.org (`winget install --id=Python.Python.3.12 -e`), add `python-preference = "system"` to `%APPDATA%\uv\uv.toml`, delete the `.venv` folder and run `uv sync` again. Use `uv run python -m ...` rather than `uv run ragnosis ...`. |
+| `DLL initialization routine failed` when indexing | The Visual C++ Redistributable is missing or old; install it as in step 1. |
+| `FileNotFoundError` for a file under `.venv\Lib\site-packages\transformers` when indexing | The folder path is too long for Windows (over 260 characters with the package's file names). Clone into a shorter folder, delete `.venv` and run `uv sync` again, or turn on Windows long paths. |
+| `Ollama is not reachable` | Start Ollama (it normally starts with Windows), then try again. |
+| `Model 'qwen3.5:4b' is not downloaded` | Run `ollama pull qwen3.5:4b`. |
+| `No index in data/index` | Run `ingest` and then `index`, as in step 3. |
+| Answers take well over a minute | Close heavy programs and use the power mode "Best performance"; a laptop slows down a lot on battery saving or when hot. |
 
 ## Usage
 
