@@ -1,0 +1,59 @@
+# Evaluation results
+
+Scorecards from `python -m ragnosis evaluate` over the known questions in
+[`evaluation/answers.toml`](../evaluation/answers.toml) (see
+[decision 0008](decisions/0008-measuring-answers-and-rewriting-questions.md)).
+Rerun them after changing prompts, models, chunking or search, and add the
+results here, newest first.
+
+Times depend on the machine and what else runs on it; compare them only within
+one table.
+
+## 2026-10-27/28: rewriting questions for search (0.5.0)
+
+**Setup:** `qwen3.5:4b` through Ollama, `intfloat/multilingual-e5-small`, 4
+passages per answer, temperature 0 with a fixed seed, laptop CPU (Intel Core
+i5-1145G7, 16 GB RAM). 16 cases: 9 in Swedish, 7 in English, 2 of them outside
+the sources.
+
+| `RAGNOSIS_QUERY_REWRITE` | Passed | Median per answer | Total |
+|---|---|---|---|
+| `never` | 12 / 16 | 32 s | 9.2 min |
+| `swedish` | 13 / 16 | 34 s | 10.3 min |
+| **`always`** (chosen default) | **15 / 16** | 44 s | 13.8 min |
+
+| Case | never | swedish | always | Notes |
+|---|---|---|---|---|
+| blackbeard-death-en | ✗ | ✗ | ✓ | "How did Blackbeard die?" ranks the passage about his death 8th; the keywords find it |
+| blackbeard-death-sv | ✗ | ✓ | ✓ | Without rewriting, the answer was about his beard |
+| svartskagg-death-sv | ✗ | ✗ | ✗ | The model does not know that Svartskägg is Blackbeard and searches for the Black Death; it declines rather than inventing an answer |
+| salamis-en | ✗ | ✗ | ✓ | Triremes were only found with keywords |
+| the other 12 | ✓ | ✓ | ✓ | |
+
+**Findings**
+
+- Search matches keywords better than questions: "How did Blackbeard die?"
+  ranked the passage about his death 8th, "Blackbeard killed in battle" 1st.
+  Rewriting into keywords helps English questions as much as Swedish ones.
+- Rewriting costs about 6 seconds per question.
+- Translated names need more than rewriting with this model. Planned: store
+  each article's Swedish name from Wikipedia or Wikidata in the index.
+- The rewrite prompt's examples must not come from the known questions. An
+  early prompt used "Svartskägg becomes Blackbeard" as its example, which would
+  have passed that case for the wrong reason; a test now guards against it.
+
+### Before the measurements were reliable
+
+The first two runs had to be redone, and are kept here so the numbers above
+can be read with that in mind:
+
+- **First run, without rewriting: 12 of 16.** Two failures were in the checks,
+  not the answers: the language check called a correct Swedish answer
+  "unknown", and the flag case expected the name "Jolly Roger" although the
+  answer described the flag correctly. After fixing both, the same answers
+  scored 14 of 16.
+- **Second run, rewriting Swedish questions: 11 of 16.** Two English cases,
+  untouched by rewriting, changed verdict between runs: answers varied by
+  chance. Answers have since been written with temperature 0 and a fixed seed,
+  and identical inputs now give identical answers, as the `never` and
+  `swedish` runs above show for the English cases.
