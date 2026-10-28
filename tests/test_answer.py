@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from factories import FakeChatModel, FakeEmbedder, ScriptedChatModel, make_chunk
@@ -11,7 +13,10 @@ from hypothesis import strategies as st
 from ragnosis.answer import (
     ANSWER_TEMPERATURE,
     DEFAULT_K,
+    MAX_QUERY_CHARS,
     NO_PASSAGES_TEXT,
+    REWRITE_EXAMPLES,
+    REWRITE_PROMPT,
     SAME_LANGUAGE_RULE,
     SWEDISH_RULE,
     SYSTEM_PROMPT,
@@ -20,9 +25,12 @@ from ragnosis.answer import (
     build_messages,
     cited_numbers,
     is_swedish,
+    rewrite_query,
+    should_rewrite,
     system_prompt,
 )
-from ragnosis.llm import LLMError
+from ragnosis.llm import LLMError, Message
+from ragnosis.settings import RewriteMode
 from ragnosis.vector_store import SearchResult, VectorStore
 
 PASSAGES = {
@@ -261,12 +269,124 @@ def test_works_without_a_callback_on_an_empty_index(embedder: FakeEmbedder) -> N
     assert answer.text == NO_PASSAGES_TEXT
 
 
+# --- Rewriting the question for search ---
+
+
+@pytest.mark.parametrize(
+    ("question", "mode", "expected"),
+    [
+        ("Hur dog Svartskägg?", "swedish", True),
+        ("How did Blackbeard die?", "swedish", False),
+        ("How did Blackbeard die?", "always", True),
+        ("Hur dog Svartskägg?", "never", False),
+    ],
+)
+def test_should_rewrite(question: str, mode: RewriteMode, expected: bool) -> None:
+    assert should_rewrite(question, mode) is expected
+
+
+@pytest.mark.parametrize(
+    ("reply", "query"),
+    [
+        ("How did Blackbeard die", "How did Blackbeard die"),
+        ('"How did Blackbeard die"', "How did Blackbeard die"),
+        ("“Blackbeard death”", "Blackbeard death"),
+        ("`Blackbeard death`", "Blackbeard death"),
+        ("Search query: Blackbeard death", "Blackbeard death"),
+        ("English search query: Blackbeard death", "Blackbeard death"),
+        ("Query: Blackbeard death", "Blackbeard death"),
+        ("\n\nBlackbeard death\nThis query uses the English name.", "Blackbeard death"),
+        ("  Blackbeard death  ", "Blackbeard death"),
+    ],
+)
+def test_rewrite_query_cleans_up_the_reply(reply: str, query: str) -> None:
+    assert rewrite_query("Hur dog Svartskägg?", ScriptedChatModel(reply)) == query
+
+
+@pytest.mark.parametrize("reply", ["", "   \n  ", '""', "Query:"])
+def test_empty_rewrite_falls_back_to_the_question(reply: str) -> None:
+    assert rewrite_query("Hur dog Svartskägg?", ScriptedChatModel(reply)) == "Hur dog Svartskägg?"
+
+
+def test_overlong_rewrite_is_cut() -> None:
+    query = rewrite_query("Q?", ScriptedChatModel("word " * 100))
+    assert len(query) == MAX_QUERY_CHARS
+
+
+def test_rewrite_shows_the_model_examples_before_the_question() -> None:
+    llm = ScriptedChatModel("Blackbeard death")
+    rewrite_query("Hur dog Svartskägg?", llm)
+
+    (prompt,) = llm.prompts
+    assert prompt[0] == Message("system", REWRITE_PROMPT)
+    assert [m.role for m in prompt[1:-1]] == ["user", "assistant"] * len(REWRITE_EXAMPLES)
+    assert prompt[1:3] == [
+        Message("user", REWRITE_EXAMPLES[0][0]),
+        Message("assistant", REWRITE_EXAMPLES[0][1]),
+    ]
+    assert prompt[-1] == Message("user", "Hur dog Svartskägg?")
+    assert llm.temperatures == [0.0]
+
+
+def test_rewrite_prompt_does_not_give_away_evaluation_answers() -> None:
+    # Examples taken from the known questions would make the scorecard measure
+    # what the prompt told the model rather than what it can do.
+    from ragnosis.evaluation import DEFAULT_CASES_FILE, load_cases
+
+    repo = Path(__file__).resolve().parents[1]
+    prompt_text = " ".join([REWRITE_PROMPT, *(q + " " + k for q, k in REWRITE_EXAMPLES)])
+    for case in load_cases(repo / DEFAULT_CASES_FILE):
+        assert case.question not in prompt_text
+    assert "Svartskägg" not in prompt_text
+
+
+def test_ask_searches_with_the_rewritten_query_but_answers_the_question(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    # No word of the Swedish question matches; the English query finds Ocracoke.
+    llm = ScriptedChatModel("Teach killed Ocracoke Inlet", "Han dödades vid Ocracoke [1].")
+
+    answer = ask("Hur dog Svartskägg?", store=store, embedder=embedder, llm=llm, rewrite="swedish")
+
+    assert answer.search_query == "Teach killed Ocracoke Inlet"
+    assert answer.passages[0].chunk.article_title == "Blackbeard"
+    assert answer.question == "Hur dog Svartskägg?"
+    answer_prompt = llm.prompts[1]
+    assert answer_prompt[1].content.endswith("Question: Hur dog Svartskägg?")
+    assert answer_prompt[0].content.endswith(SWEDISH_RULE)
+
+
 def test_answers_are_written_with_temperature_zero(
     store: VectorStore, embedder: FakeEmbedder
 ) -> None:
     llm = ScriptedChatModel("Han dödades [1].")
     ask("Where was Teach killed?", store=store, embedder=embedder, llm=llm)
     assert llm.temperatures == [ANSWER_TEMPERATURE] == [0.0]
+
+
+def test_ask_does_not_rewrite_unless_asked(store: VectorStore, embedder: FakeEmbedder) -> None:
+    llm = ScriptedChatModel("Han dödades [1].")
+    answer = ask("Hur dog Svartskägg?", store=store, embedder=embedder, llm=llm)
+    assert answer.search_query is None
+    assert len(llm.prompts) == 1
+
+
+def test_swedish_mode_leaves_english_questions_alone(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    llm = ScriptedChatModel("He was killed [1].")
+    answer = ask(
+        "Where was Teach killed?", store=store, embedder=embedder, llm=llm, rewrite="swedish"
+    )
+    assert answer.search_query is None
+    assert len(llm.prompts) == 1
+
+
+def test_rewritten_query_is_kept_when_nothing_is_found(embedder: FakeEmbedder) -> None:
+    empty = VectorStore(embedder.model_name, embedder.dimension)
+    llm = ScriptedChatModel("Blackbeard death")
+    answer = ask("Hur dog Svartskägg?", store=empty, embedder=embedder, llm=llm, rewrite="always")
+    assert answer == Answer("Hur dog Svartskägg?", NO_PASSAGES_TEXT, [], "Blackbeard death")
 
 
 def test_model_errors_reach_the_caller(store: VectorStore, embedder: FakeEmbedder) -> None:

@@ -14,12 +14,14 @@ from ragnosis.settings import (
     DEFAULT_LLM_KEEP_ALIVE,
     DEFAULT_LLM_MODEL,
     DEFAULT_OLLAMA_URL,
+    DEFAULT_QUERY_REWRITE,
     DEFAULT_TOPICS_FILE,
     DEFAULT_WIKI_LANGUAGE,
     EMBEDDING_MODEL_VAR,
     LLM_KEEP_ALIVE_VAR,
     LLM_MODEL_VAR,
     OLLAMA_URL_VAR,
+    QUERY_REWRITE_VAR,
     TOPICS_FILE_VAR,
     WIKI_LANGUAGE_VAR,
     Settings,
@@ -34,7 +36,24 @@ ALL_VARS = (
     OLLAMA_URL_VAR,
     LLM_MODEL_VAR,
     LLM_KEEP_ALIVE_VAR,
+    QUERY_REWRITE_VAR,
 )
+
+
+def test_query_rewrite_defaults_to_always() -> None:
+    # The scorecard passed 15 of 16 with "always", 13 with "swedish" (docs/evaluation.md).
+    assert Settings.from_env({}).query_rewrite == DEFAULT_QUERY_REWRITE == "always"
+
+
+@pytest.mark.parametrize("value", ["always", "swedish", "never"])
+def test_query_rewrite_accepts_its_modes(value: str) -> None:
+    assert Settings.from_env({QUERY_REWRITE_VAR: value}).query_rewrite == value
+
+
+@pytest.mark.parametrize("value", ["yes", "Swedish", "sometimes", " never"])
+def test_query_rewrite_rejects_other_values(value: str) -> None:
+    with pytest.raises(ValueError, match="Query rewrite must be one of always, swedish, never"):
+        Settings.from_env({QUERY_REWRITE_VAR: value})
 
 
 def test_keep_alive_defaults_to_thirty_minutes() -> None:

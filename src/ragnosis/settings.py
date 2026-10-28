@@ -12,6 +12,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, cast
 from urllib.parse import urlsplit
 
 from ragnosis.llm import DEFAULT_KEEP_ALIVE
@@ -23,6 +24,12 @@ EMBEDDING_MODEL_VAR = "RAGNOSIS_EMBEDDING_MODEL"
 OLLAMA_URL_VAR = "RAGNOSIS_OLLAMA_URL"
 LLM_MODEL_VAR = "RAGNOSIS_LLM_MODEL"
 LLM_KEEP_ALIVE_VAR = "RAGNOSIS_LLM_KEEP_ALIVE"
+QUERY_REWRITE_VAR = "RAGNOSIS_QUERY_REWRITE"
+
+# When to rewrite a question into an English search query before retrieval
+# (docs/decisions/0008): every question, only Swedish ones, or never.
+RewriteMode = Literal["always", "swedish", "never"]
+REWRITE_MODES: tuple[RewriteMode, ...] = ("always", "swedish", "never")
 
 DEFAULT_DATA_DIR = Path("data")
 DEFAULT_TOPICS_FILE = Path("topics/pirates-and-antiquity-europe.txt")
@@ -31,6 +38,7 @@ DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_LLM_MODEL = "qwen3.5:4b"
 DEFAULT_LLM_KEEP_ALIVE = DEFAULT_KEEP_ALIVE
+DEFAULT_QUERY_REWRITE: RewriteMode = "always"
 
 # The language code becomes part of the API host name, so only accept what real
 # Wikipedia codes look like ("en", "sv", "zh-yue") and nothing that could change the URL.
@@ -55,6 +63,7 @@ class Settings:
     ollama_url: str = DEFAULT_OLLAMA_URL
     llm_model: str = DEFAULT_LLM_MODEL
     llm_keep_alive: str = DEFAULT_LLM_KEEP_ALIVE
+    query_rewrite: RewriteMode = DEFAULT_QUERY_REWRITE
 
     def __post_init__(self) -> None:
         if not is_valid_language(self.wiki_language):
@@ -69,6 +78,10 @@ class Settings:
         if not _DURATION_PATTERN.fullmatch(self.llm_keep_alive):
             raise ValueError(
                 f"Keep-alive must be a duration like 30m, 1h or -1: {self.llm_keep_alive!r}"
+            )
+        if self.query_rewrite not in REWRITE_MODES:
+            raise ValueError(
+                f"Query rewrite must be one of {', '.join(REWRITE_MODES)}: {self.query_rewrite!r}"
             )
 
     @property
@@ -93,4 +106,6 @@ class Settings:
             ollama_url=env.get(OLLAMA_URL_VAR) or DEFAULT_OLLAMA_URL,
             llm_model=env.get(LLM_MODEL_VAR) or DEFAULT_LLM_MODEL,
             llm_keep_alive=env.get(LLM_KEEP_ALIVE_VAR) or DEFAULT_LLM_KEEP_ALIVE,
+            # Checked in __post_init__; the cast only tells the type checker.
+            query_rewrite=cast(RewriteMode, env.get(QUERY_REWRITE_VAR) or DEFAULT_QUERY_REWRITE),
         )

@@ -236,7 +236,15 @@ def run_ask(settings: Settings, *, question: str, k: int) -> int:
         with OllamaClient(
             settings.llm_model, settings.ollama_url, keep_alive=settings.llm_keep_alive
         ) as llm:
-            answer = ask(question, store=store, embedder=embedder, llm=llm, k=k, on_text=_show)
+            answer = ask(
+                question,
+                store=store,
+                embedder=embedder,
+                llm=llm,
+                k=k,
+                rewrite=settings.query_rewrite,
+                on_text=_show,
+            )
     except (LLMUnavailableError, ModelNotFoundError) as exc:
         logger.error("%s", exc)
         return EXIT_USAGE
@@ -265,7 +273,15 @@ def run_serve(settings: Settings, *, port: int) -> int:
     ) as llm:
 
         def answer_question(question: str, k: int, on_text: Callable[[str], None]) -> Answer:
-            return ask(question, store=store, embedder=embedder, llm=llm, k=k, on_text=on_text)
+            return ask(
+                question,
+                store=store,
+                embedder=embedder,
+                llm=llm,
+                k=k,
+                rewrite=settings.query_rewrite,
+                on_text=on_text,
+            )
 
         _warm_up(llm)
         logger.info("RAGnosis is running at http://localhost:%d (Ctrl+C stops it)", port)
@@ -308,7 +324,13 @@ def run_evaluate(settings: Settings, *, cases_file: Path, only: list[str] | None
             logger.info("Case %d/%d: %s", number, len(cases), case.id)
             start = _clock()
             try:
-                answer = ask(case.question, store=store, embedder=embedder, llm=llm)
+                answer = ask(
+                    case.question,
+                    store=store,
+                    embedder=embedder,
+                    llm=llm,
+                    rewrite=settings.query_rewrite,
+                )
             except (LLMUnavailableError, ModelNotFoundError) as exc:
                 logger.error("%s", exc)
                 return EXIT_USAGE
@@ -331,6 +353,8 @@ def format_verdict(verdict: Verdict, seconds: float) -> str:
     if verdict.passed:
         return line
     details = "".join(f"      - {problem}\n" for problem in verdict.problems)
+    if verdict.answer.search_query is not None:
+        details += f"      searched for: {verdict.answer.search_query}\n"
     preview = " ".join(verdict.answer.text.split())
     if len(preview) > PREVIEW_CHARS:
         preview = preview[:PREVIEW_CHARS].rstrip() + "…"

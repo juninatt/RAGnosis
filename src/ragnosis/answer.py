@@ -16,6 +16,7 @@ from typing import Protocol
 
 from ragnosis.embeddings import Embedder
 from ragnosis.llm import Message
+from ragnosis.settings import RewriteMode
 from ragnosis.vector_store import SearchResult, VectorStore
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,29 @@ SWEDISH_RULE = (
     "The question is in Swedish: answer in Swedish (svenska), not in Norwegian, Danish or English."
 )
 NO_PASSAGES_TEXT = "There are no indexed passages to answer from; run ingest and index first."
+
+# Rewriting the question into an English search query fixes searches the
+# embedding model gets wrong, such as Swedish names ("Svartskägg" for
+# Blackbeard). It costs an extra model call, so it can be limited (0008).
+# Keywords rather than a question: "How did Blackbeard die?" ranked the passage
+# about his death 8th, "Blackbeard killed in battle" ranked it 1st. The small
+# model follows examples better than descriptions. None of the examples may come
+# from evaluation/answers.toml, or the scorecard would measure what it was told.
+REWRITE_PROMPT = (
+    "Turn the user's question into a search query for an English encyclopedia: "
+    "4 to 8 English keywords. Translate names to the standard English names of people, "
+    "places and events, for example 'Karthago' becomes 'Carthage' and 'Djingis khan' "
+    "becomes 'Genghis Khan'. Add words for what the question asks about. "
+    "Reply with the keywords only."
+)
+REWRITE_EXAMPLES = (
+    ("Hur dog Julius Caesar?", "Julius Caesar assassination death killed Ides of March"),
+    ("Vad var Hansan?", "Hanseatic League trade towns Baltic"),
+    ("Who built the Parthenon?", "Parthenon construction architects Pericles Athens"),
+    ("Varför gick Titanic under?", "Titanic sinking cause iceberg 1912"),
+)
+MAX_QUERY_CHARS = 200
+_QUERY_LABEL = re.compile(r"^(english )?(search )?query\s*:\s*", re.IGNORECASE)
 
 # "[1]", "[2][3]" and "[1, 2]" all occur in model output.
 _CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
@@ -89,6 +113,9 @@ class Answer:
     question: str
     text: str
     passages: list[SearchResult]
+    # The rewritten query the passages were found with; None when the question
+    # itself was searched for.
+    search_query: str | None = None
 
     @property
     def cited(self) -> list[tuple[int, SearchResult]]:
@@ -123,6 +150,31 @@ def build_messages(question: str, passages: Sequence[SearchResult]) -> list[Mess
     ]
 
 
+def should_rewrite(question: str, mode: RewriteMode) -> bool:
+    """Whether ``mode`` asks for ``question`` to be rewritten before searching."""
+    if mode == "always":
+        return True
+    if mode == "swedish":
+        return is_swedish(question)
+    return False
+
+
+def rewrite_query(question: str, llm: ChatModel) -> str:
+    """An English search query for ``question``, from the model.
+
+    Small models sometimes add quotes, a "Query:" label or a second line; those
+    are removed. If nothing usable is left, the question itself is returned.
+    """
+    messages = [Message("system", REWRITE_PROMPT)]
+    for example, keywords in REWRITE_EXAMPLES:
+        messages += [Message("user", example), Message("assistant", keywords)]
+    messages.append(Message("user", question))
+    reply = "".join(llm.stream_chat(messages, temperature=0.0))
+    first_line = next((line for line in reply.splitlines() if line.strip()), "")
+    query = _QUERY_LABEL.sub("", first_line.strip()).strip(" \"'`“”").strip()
+    return query[:MAX_QUERY_CHARS] or question
+
+
 def ask(
     question: str,
     *,
@@ -130,10 +182,13 @@ def ask(
     embedder: Embedder,
     llm: ChatModel,
     k: int = DEFAULT_K,
+    rewrite: RewriteMode = "never",
     on_text: Callable[[str], None] | None = None,
 ) -> Answer:
     """Retrieve the ``k`` best passages and have ``llm`` answer from them.
 
+    With ``rewrite``, the passages are found with an English search query the
+    model writes first; the answer is still written for the original question.
     ``on_text`` receives the answer piece by piece while it is written, so a
     caller can show it immediately instead of after the whole minute.
 
@@ -145,14 +200,17 @@ def ask(
     if not question:
         raise ValueError("The question must not be blank")
 
-    passages = store.search(embedder.embed_query(question), k)
+    search_query = rewrite_query(question, llm) if should_rewrite(question, rewrite) else None
+    if search_query is not None:
+        logger.info("Searching for %r", search_query)
+    passages = store.search(embedder.embed_query(search_query or question), k)
     logger.info(
         "Answering from: %s", ", ".join(r.chunk.article_title for r in passages) or "nothing"
     )
     if not passages:
         if on_text:
             on_text(NO_PASSAGES_TEXT)
-        return Answer(question, NO_PASSAGES_TEXT, [])
+        return Answer(question, NO_PASSAGES_TEXT, [], search_query)
 
     pieces: list[str] = []
     for piece in llm.stream_chat(
@@ -161,4 +219,4 @@ def ask(
         pieces.append(piece)
         if on_text:
             on_text(piece)
-    return Answer(question, "".join(pieces), passages)
+    return Answer(question, "".join(pieces), passages, search_query)

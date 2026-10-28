@@ -361,6 +361,7 @@ class FakeOllama(FakeChatModel):
     def stream_chat(
         self, messages: Sequence[Message], *, temperature: float = 0.2
     ) -> Iterator[str]:
+        self.events.append("chat")
         yield from super().stream_chat(messages, temperature=temperature)
         if self.error:
             raise self.error
@@ -400,6 +401,35 @@ def test_ask_uses_model_and_address_from_settings(indexed: Path) -> None:
     )
     cli.main(["ask", "pirates"])
     assert FakeOllama.created == [("gemma4:e4b", "http://gpu-box:11434")]
+
+
+@pytest.mark.parametrize(
+    ("setting", "chats"),
+    [("", 2), ("RAGNOSIS_QUERY_REWRITE=never\n", 1), ("RAGNOSIS_QUERY_REWRITE=always\n", 2)],
+    ids=["default", "never", "always"],
+)
+def test_query_rewrite_setting_decides_whether_a_swedish_question_is_rewritten(
+    indexed: Path, setting: str, chats: int
+) -> None:
+    write(indexed / ".env", setting)
+    cli.main(["ask", "Vem var Anne Bonny?"])
+    assert FakeOllama.events.count("chat") == chats
+
+
+@pytest.mark.parametrize(("setting", "chats"), [("", 2), ("RAGNOSIS_QUERY_REWRITE=swedish\n", 1)])
+def test_english_question_is_rewritten_unless_only_swedish_ones_are(
+    indexed: Path, setting: str, chats: int
+) -> None:
+    write(indexed / ".env", setting)
+    cli.main(["ask", "Who was Anne Bonny?"])
+    assert FakeOllama.events.count("chat") == chats
+
+
+def test_served_app_rewrites_by_the_setting(indexed: Path, fake_uvicorn: FakeUvicorn) -> None:
+    cli.main(["serve"])
+    client = TestClient(fake_uvicorn.calls[0]["app"], base_url="http://localhost")
+    client.post("/api/ask", json={"question": "Vem var Anne Bonny?"})
+    assert FakeOllama.events.count("chat") == 2
 
 
 @pytest.mark.parametrize("command", [["ask", "pirates"], ["serve"]])
@@ -451,6 +481,8 @@ def test_ask_failure_mid_answer_exits_with_failure_code(
 ) -> None:
     monkeypatch.setattr(FakeOllama, "reply", ("Anne Bonny was",))
     monkeypatch.setattr(FakeOllama, "error", LLMError("Lost connection to Ollama"))
+    # Without rewriting, the first model call is the answer itself.
+    write(indexed / ".env", "RAGNOSIS_QUERY_REWRITE=never\n")
     capsys.readouterr()
 
     assert cli.main(["ask", "pirates"]) == cli.EXIT_FAILURES
@@ -700,6 +732,14 @@ def test_evaluate_reads_the_committed_cases_by_default(
     cli.main(["evaluate", "--case", "japan-capital-en"])
 
     assert "japan-capital-en" in capsys.readouterr().out
+
+
+def test_failed_case_shows_the_rewritten_query(
+    cases_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-sv"])
+    out = capsys.readouterr().out
+    assert "searched for: Anne Bonny was an Irish pirate and she sailed with Jack [1]." in out
 
 
 def test_format_summary_without_cases() -> None:
