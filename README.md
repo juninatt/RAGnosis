@@ -254,3 +254,5 @@ the tools as modules avoids that: `uv run python -m pytest` and
   environment variables override both. A test fails if `.env` gains a key that
   looks like a secret.
 - **Decisions** that shape the project are recorded in `docs/decisions/`.
+- **Releases** follow the checklist in [`docs/release-checks.md`](docs/release-checks.md),
+  which also logs the manual checks.
