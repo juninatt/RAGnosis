@@ -115,6 +115,20 @@ server starts (about half a minute), and one question is answered at a time.
 `--port N` picks another port. The server only listens on this computer and
 the page loads nothing from the internet. Stop it with Ctrl+C.
 
+### Evaluate the answers
+
+```bash
+uv run python -m ragnosis evaluate
+```
+
+Answers the known questions in [`evaluation/answers.toml`](evaluation/answers.toml)
+with the real models and checks each answer: does it cite the right article,
+mention the expected facts, use the question's language, or decline when the
+sources do not cover the question? Prints PASS or FAIL per question with the
+reasons, and a summary. `--case ID` runs only some questions. A full run takes
+10 to 15 minutes; compare runs before and after a change, since answers vary a
+little.
+
 ### Settings
 
 All settings are listed with their defaults in [`.env`](.env).

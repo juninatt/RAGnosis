@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+import statistics
 import sys
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from ragnosis.answer import DEFAULT_K, Answer, ask
 from ragnosis.article_store import ArticleStore
 from ragnosis.embeddings import SentenceTransformerEmbedder
 from ragnosis.env import load_env
+from ragnosis.evaluation import DEFAULT_CASES_FILE, CaseError, Verdict, check, load_cases
 from ragnosis.indexing import update_index
 from ragnosis.ingest import ingest
 from ragnosis.llm import LLMError, LLMUnavailableError, ModelNotFoundError, OllamaClient
@@ -40,6 +43,9 @@ EXIT_USAGE = 2
 PREVIEW_CHARS = 240
 SERVE_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
+
+# Times each evaluated answer; tests replace it with a fake clock.
+_clock: Callable[[], float] = time.monotonic
 
 
 def positive_int(value: str) -> int:
@@ -99,6 +105,23 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument(
         "--port", type=port_number, default=DEFAULT_PORT, help=f"(default: {DEFAULT_PORT})"
     )
+
+    evaluate_parser = commands.add_parser(
+        "evaluate", help="answer known questions and score the answers"
+    )
+    evaluate_parser.add_argument(
+        "--cases",
+        type=Path,
+        default=DEFAULT_CASES_FILE,
+        help=f"cases file (default: {DEFAULT_CASES_FILE.as_posix()})",
+    )
+    evaluate_parser.add_argument(
+        "--case",
+        dest="only",
+        action="append",
+        metavar="ID",
+        help="run only this case; repeat for several",
+    )
     return parser
 
 
@@ -126,7 +149,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_search(settings, query=args.query, k=args.k)
     if args.command == "ask":
         return run_ask(settings, question=args.question, k=args.k)
-    return run_serve(settings, port=args.port)
+    if args.command == "serve":
+        return run_serve(settings, port=args.port)
+    return run_evaluate(settings, cases_file=args.cases, only=args.only)
 
 
 def run_ingest(settings: Settings, *, topics: Path | None, refresh: bool) -> int:
@@ -247,6 +272,81 @@ def run_serve(settings: Settings, *, port: int) -> int:
         # Localhost only: the UI is for this computer, not the network (0007).
         uvicorn.run(create_app(answer_question), host=SERVE_HOST, port=port, log_level="warning")
     return EXIT_OK
+
+
+def run_evaluate(settings: Settings, *, cases_file: Path, only: list[str] | None) -> int:
+    """Answer each known question with the real models and print a scorecard.
+
+    Compare scorecards from before and after a change (docs/decisions/0008).
+    """
+    try:
+        cases = load_cases(cases_file)
+    except (CaseError, OSError) as exc:
+        logger.error("Cannot read cases: %s", exc)
+        return EXIT_USAGE
+    if only:
+        unknown = sorted(set(only) - {case.id for case in cases})
+        if unknown:
+            logger.error("Unknown case ids: %s", unknown)
+            return EXIT_USAGE
+        cases = [case for case in cases if case.id in only]
+
+    if not VectorStore.exists(settings.index_dir):
+        logger.error("No index in %s; run index first", settings.index_dir)
+        return EXIT_USAGE
+    store = _load_store(settings)
+    if store is None:
+        return EXIT_USAGE
+
+    embedder = SentenceTransformerEmbedder(settings.embedding_model)
+    results: list[tuple[Verdict, float]] = []
+    with OllamaClient(
+        settings.llm_model, settings.ollama_url, keep_alive=settings.llm_keep_alive
+    ) as llm:
+        _warm_up(llm)
+        for number, case in enumerate(cases, start=1):
+            logger.info("Case %d/%d: %s", number, len(cases), case.id)
+            start = _clock()
+            try:
+                answer = ask(case.question, store=store, embedder=embedder, llm=llm)
+            except (LLMUnavailableError, ModelNotFoundError) as exc:
+                logger.error("%s", exc)
+                return EXIT_USAGE
+            except LLMError as exc:
+                answer = Answer(case.question, "", [])
+                verdict = Verdict(case, answer, [f"the model failed: {exc}"])
+            else:
+                verdict = check(case, answer)
+            seconds = _clock() - start
+            results.append((verdict, seconds))
+            _show(format_verdict(verdict, seconds))
+
+    _show(format_summary(results))
+    return EXIT_OK if all(verdict.passed for verdict, _ in results) else EXIT_FAILURES
+
+
+def format_verdict(verdict: Verdict, seconds: float) -> str:
+    """One case: PASS or FAIL with its time, and for a failure why and how it began."""
+    line = f"{'PASS' if verdict.passed else 'FAIL'}  {verdict.case.id:<28} {seconds:4.0f} s\n"
+    if verdict.passed:
+        return line
+    details = "".join(f"      - {problem}\n" for problem in verdict.problems)
+    preview = " ".join(verdict.answer.text.split())
+    if len(preview) > PREVIEW_CHARS:
+        preview = preview[:PREVIEW_CHARS].rstrip() + "…"
+    return line + details + f"      answer: {preview or '(none)'}\n"
+
+
+def format_summary(results: Sequence[tuple[Verdict, float]]) -> str:
+    """How many passed, and typical and total time."""
+    if not results:
+        return "\nNo cases were run.\n"
+    passed = sum(verdict.passed for verdict, _ in results)
+    seconds = [s for _, s in results]
+    return (
+        f"\n{passed} of {len(results)} passed · median {statistics.median(seconds):.0f} s"
+        f" · total {sum(seconds) / 60:.1f} min\n"
+    )
 
 
 def _warm_up(llm: OllamaClient) -> None:

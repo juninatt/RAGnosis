@@ -18,6 +18,7 @@ from starlette.testclient import TestClient
 from ragnosis import cli
 from ragnosis.answer import Answer
 from ragnosis.article_store import ArticleStore
+from ragnosis.evaluation import Case, Verdict
 from ragnosis.llm import LLMError, LLMUnavailableError, Message, ModelNotFoundError
 from ragnosis.vector_store import MANIFEST_FILE, SearchResult, VectorStore
 from ragnosis.wikipedia import Article, ArticleNotFoundError
@@ -565,6 +566,152 @@ def test_serve_rejects_invalid_port(port: str, fake_uvicorn: FakeUvicorn) -> Non
     with pytest.raises(SystemExit) as exit_info:
         cli.main(["serve", "--port", port])
     assert exit_info.value.code == cli.EXIT_USAGE
+
+
+# --- evaluate ---
+
+CASES = """
+[[case]]
+id = "bonny-en"
+question = "Who was Anne Bonny?"
+language = "en"
+sources = ["Anne Bonny"]
+mentions = ["Irish"]
+
+[[case]]
+id = "bonny-sv"
+question = "Vem var Anne Bonny?"
+language = "sv"
+sources = ["Anne Bonny"]
+mentions = ["irländsk"]
+"""
+
+
+@pytest.fixture
+def cases_file(indexed: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Two cases: the fake model's English answer passes one and fails the other."""
+    readings = iter([0.0, 31.0, 100.0, 133.0])
+    monkeypatch.setattr(cli, "_clock", lambda: next(readings))
+    monkeypatch.setattr(
+        FakeOllama, "reply", ("Anne Bonny was an Irish pirate ", "and she sailed with Jack [1].")
+    )
+    return write(indexed / "cases.toml", CASES)
+
+
+def test_evaluate_prints_a_scorecard_and_fails_when_a_case_fails(
+    cases_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+
+    assert cli.main(["evaluate", "--cases", str(cases_file)]) == cli.EXIT_FAILURES
+
+    out = capsys.readouterr().out
+    assert "PASS  bonny-en" in out
+    assert "  31 s" in out
+    assert "FAIL  bonny-sv" in out
+    assert "- is in en, expected sv" in out
+    assert "- mentions none of ['irländsk']" in out
+    assert "answer: Anne Bonny was an Irish pirate and she sailed with Jack [1]." in out
+    assert out.endswith("\n1 of 2 passed · median 32 s · total 1.1 min\n")
+
+
+def test_evaluate_passes_when_every_case_passes(
+    cases_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-en"]) == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "bonny-sv" not in out
+    assert "1 of 1 passed" in out
+
+
+def test_evaluate_loads_the_model_before_the_first_case(cases_file: Path) -> None:
+    cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-en"])
+    assert FakeOllama.events[0] == "load"
+
+
+def test_evaluate_records_a_model_failure_and_carries_on(
+    cases_file: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(FakeOllama, "error", LLMError("Lost connection to Ollama"))
+
+    assert cli.main(["evaluate", "--cases", str(cases_file)]) == cli.EXIT_FAILURES
+
+    out = capsys.readouterr().out
+    assert out.count("- the model failed: Lost connection to Ollama") == 2
+    assert "answer: (none)" in out
+    assert "0 of 2 passed" in out
+
+
+@pytest.mark.parametrize(
+    "error",
+    [LLMUnavailableError("start Ollama"), ModelNotFoundError("run: ollama pull")],
+    ids=["ollama-down", "model-missing"],
+)
+def test_evaluate_stops_when_the_model_cannot_be_reached(
+    cases_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    error: Exception,
+) -> None:
+    monkeypatch.setattr(FakeOllama, "error", error)
+    assert cli.main(["evaluate", "--cases", str(cases_file)]) == cli.EXIT_USAGE
+    assert str(error) in caplog.text
+
+
+def test_evaluate_rejects_unknown_case_ids(
+    cases_file: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    code = cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-en", "--case", "x"])
+    assert code == cli.EXIT_USAGE
+    assert "Unknown case ids: ['x']" in caplog.text
+
+
+@pytest.mark.parametrize("content", [None, "not = [toml"], ids=["missing", "malformed"])
+def test_evaluate_rejects_an_unreadable_cases_file(
+    indexed: Path, caplog: pytest.LogCaptureFixture, content: str | None
+) -> None:
+    path = indexed / "cases.toml"
+    if content is not None:
+        write(path, content)
+    assert cli.main(["evaluate", "--cases", str(path)]) == cli.EXIT_USAGE
+    assert "Cannot read cases" in caplog.text
+
+
+def test_evaluate_without_index_exits_with_usage_code(
+    project_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    path = write(project_dir / "cases.toml", CASES)
+    assert cli.main(["evaluate", "--cases", str(path)]) == cli.EXIT_USAGE
+    assert "run index first" in caplog.text
+
+
+def test_evaluate_refuses_index_built_with_another_model(cases_file: Path, indexed: Path) -> None:
+    write(indexed / ".env", "RAGNOSIS_EMBEDDING_MODEL=other/model\n")
+    assert cli.main(["evaluate", "--cases", str(cases_file)]) == cli.EXIT_USAGE
+
+
+def test_evaluate_reads_the_committed_cases_by_default(
+    indexed: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_cases = Path(__file__).resolve().parents[1] / "evaluation" / "answers.toml"
+    write(indexed / "evaluation" / "answers.toml", repo_cases.read_text(encoding="utf-8"))
+    monkeypatch.setattr(cli, "_clock", lambda: 0.0)
+
+    cli.main(["evaluate", "--case", "japan-capital-en"])
+
+    assert "japan-capital-en" in capsys.readouterr().out
+
+
+def test_format_summary_without_cases() -> None:
+    assert cli.format_summary([]) == "\nNo cases were run.\n"
+
+
+def test_format_verdict_shortens_long_answers() -> None:
+    case = Case(id="long", question="Q?", language="en", mentions=("x",))
+    verdict = Verdict(case, Answer("Q?", "word " * 100, []), ["mentions none of ['x']"])
+    preview = cli.format_verdict(verdict, 5.0).splitlines()[-1]
+    assert preview.endswith("…")
+    assert len(preview) <= len("      answer: ") + cli.PREVIEW_CHARS + 1
 
 
 def test_format_sources_lists_cited_passages_in_citation_order() -> None:
