@@ -24,11 +24,18 @@
     h1 { font-size: 1.6rem; margin: 0 0 0.2rem; }
     .tagline { color: var(--muted); margin: 0 0 1.5rem; }
     form { display: flex; gap: 0.5rem; }
-    input {
+    #question {
       flex: 1; min-width: 0; padding: 0.7rem 0.9rem; font: inherit; color: inherit;
       background: var(--panel); border: 1px solid var(--line); border-radius: 0.5rem;
     }
-    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #question:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #length-choice {
+      display: flex; gap: 1rem; align-items: center; margin: 0.6rem 0 0; padding: 0;
+      border: 0; color: var(--muted); font-size: 0.9rem;
+    }
+    #length-choice legend { float: left; padding: 0; margin-right: 0.25rem; }
+    #length-choice label { display: inline-flex; gap: 0.35rem; align-items: center; cursor: pointer; }
+    #length-choice input { accent-color: var(--accent); margin: 0; }
     button {
       padding: 0.7rem 1.2rem; font: inherit; font-weight: 600; cursor: pointer;
       color: var(--bg); background: var(--accent); border: 0; border-radius: 0.5rem;
@@ -56,6 +63,11 @@
            placeholder="Vem var Anne Bonny?" aria-label="Question">
     <button id="ask-button" type="submit">Ask</button>
   </form>
+  <fieldset id="length-choice">
+    <legend>Answer:</legend>
+    <label><input type="radio" name="length" value="short" checked> Short</label>
+    <label><input type="radio" name="length" value="detailed"> Detailed</label>
+  </fieldset>
 
   <p id="status" role="status" aria-live="polite"></p>
   <p id="answer" aria-live="polite"></p>
@@ -78,6 +90,24 @@
   const timingLine = document.getElementById("timing");
   const sourcesBox = document.getElementById("sources-box");
   const sources = document.getElementById("sources");
+  const lengthInputs = document.querySelectorAll('input[name="length"]');
+  const LENGTH_KEY = "ragnosis.answer-length";
+
+  function chosenLength() {
+    return document.querySelector('input[name="length"]:checked').value;
+  }
+
+  // The length choice is remembered in this browser only. Storage can be
+  // unavailable (private windows, blocked site data); the page works without it.
+  try {
+    const saved = localStorage.getItem(LENGTH_KEY);
+    for (const choice of lengthInputs) if (choice.value === saved) choice.checked = true;
+  } catch (error) { /* keep the default */ }
+  for (const choice of lengthInputs) {
+    choice.addEventListener("change", () => {
+      try { localStorage.setItem(LENGTH_KEY, chosenLength()); } catch (error) { /* not saved */ }
+    });
+  }
 
   function setStatus(text, isError = false) {
     statusLine.textContent = text;
@@ -139,7 +169,7 @@
     const response = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, length: chosenLength() }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));

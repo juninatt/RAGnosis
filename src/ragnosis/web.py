@@ -21,7 +21,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from importlib.resources import files
-from typing import Any
+from typing import Any, NamedTuple
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -30,13 +30,13 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
-from ragnosis.answer import DEFAULT_K, Answer
+from ragnosis.answer import ANSWER_LENGTHS, DEFAULT_K, Answer, AnswerLength
 from ragnosis.llm import LLMError, LLMUnavailableError, ModelNotFoundError
 
 logger = logging.getLogger(__name__)
 
-# ask(question, k, on_text) -> Answer; the CLI binds the index and models to it.
-AnswerFn = Callable[[str, int, Callable[[str], None]], Answer]
+# ask(question, k, length, on_text) -> Answer; the CLI binds the index and models to it.
+AnswerFn = Callable[[str, int, AnswerLength, Callable[[str], None]], Answer]
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 MAX_QUESTION_CHARS = 1000
@@ -70,14 +70,14 @@ def create_app(
         parsed = _parse_question(body)
         if isinstance(parsed, str):
             return _error(400, parsed)
-        question, k = parsed
+        question = parsed
 
         if not busy.acquire(blocking=False):
             return _error(429, "Another question is being answered; try again when it is done")
         events: queue.Queue[dict[str, Any] | None] = queue.Queue()
         worker = threading.Thread(
             target=_answer_in_background,
-            args=(answer_question, question, k, events, busy, clock),
+            args=(answer_question, question, events, busy, clock),
             daemon=True,
         )
         worker.start()
@@ -97,8 +97,16 @@ def create_app(
     return app
 
 
-def _parse_question(body: Any) -> tuple[str, int] | str:
-    """The question and k from a request body, or a message saying what is wrong."""
+class Question(NamedTuple):
+    """A validated request: the question, how many passages and how long an answer."""
+
+    text: str
+    k: int
+    length: AnswerLength
+
+
+def _parse_question(body: Any) -> Question | str:
+    """The question from a request body, or a message saying what is wrong."""
     if not isinstance(body, dict):
         return "The body must be a JSON object"
     question = body.get("question")
@@ -109,13 +117,15 @@ def _parse_question(body: Any) -> tuple[str, int] | str:
     k = body.get("k", DEFAULT_K)
     if not isinstance(k, int) or isinstance(k, bool) or not 1 <= k <= MAX_K:
         return f"k must be a whole number from 1 to {MAX_K}"
-    return question.strip(), k
+    length = body.get("length", "short")
+    if length not in ANSWER_LENGTHS:
+        return f"length must be one of {', '.join(ANSWER_LENGTHS)}"
+    return Question(question.strip(), k, length)
 
 
 def _answer_in_background(
     answer_question: AnswerFn,
-    question: str,
-    k: int,
+    question: Question,
     events: queue.Queue[dict[str, Any] | None],
     busy: threading.Lock,
     clock: Callable[[], float],
@@ -130,7 +140,7 @@ def _answer_in_background(
         events.put({"type": "text", "text": text})
 
     try:
-        answer = answer_question(question, k, on_text)
+        answer = answer_question(question.text, question.k, question.length, on_text)
         timing = {
             "first_text_seconds": round(first_text_at[0], 1) if first_text_at else None,
             "total_seconds": round(clock() - start, 1),

@@ -115,7 +115,9 @@ Then open <http://localhost:8000>. Type a question; the answer appears as it is
 written and the cited sources link to Wikipedia. The models load once when the
 server starts (about half a minute), and one question is answered at a time.
 `--port N` picks another port. The server only listens on this computer and
-the page loads nothing from the internet. Stop it with Ctrl+C.
+the page loads nothing from the internet. Stop it with Ctrl+C. Under the
+question box you choose a short or a detailed answer; the page remembers the
+choice in this browser.
 
 ### Evaluate the answers
 

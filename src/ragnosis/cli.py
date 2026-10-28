@@ -280,7 +280,9 @@ def run_serve(settings: Settings, *, port: int) -> int:
         settings.llm_model, settings.ollama_url, keep_alive=settings.llm_keep_alive
     ) as llm:
 
-        def answer_question(question: str, k: int, on_text: Callable[[str], None]) -> Answer:
+        def answer_question(
+            question: str, k: int, length: AnswerLength, on_text: Callable[[str], None]
+        ) -> Answer:
             return ask(
                 question,
                 store=store,
@@ -288,6 +290,7 @@ def run_serve(settings: Settings, *, port: int) -> int:
                 llm=llm,
                 k=k,
                 rewrite=settings.query_rewrite,
+                length=length,
                 on_text=on_text,
             )
 

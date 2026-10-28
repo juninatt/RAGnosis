@@ -14,7 +14,7 @@ from factories import make_chunk
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
-from ragnosis.answer import DEFAULT_K, Answer
+from ragnosis.answer import DEFAULT_K, Answer, AnswerLength
 from ragnosis.llm import LLMError, LLMUnavailableError, ModelNotFoundError
 from ragnosis.vector_store import SearchResult
 from ragnosis.web import MAX_BODY_BYTES, MAX_K, MAX_QUESTION_CHARS, AnswerFn, create_app
@@ -37,10 +37,12 @@ class Recorder:
     def __init__(self, *pieces: str, error: Exception | None = None) -> None:
         self.pieces = pieces or ("Bonny [2] ", "and Teach [1].")
         self.error = error
-        self.calls: list[tuple[str, int]] = []
+        self.calls: list[tuple[str, int, AnswerLength]] = []
 
-    def __call__(self, question: str, k: int, on_text: Callable[[str], None]) -> Answer:
-        self.calls.append((question, k))
+    def __call__(
+        self, question: str, k: int, length: AnswerLength, on_text: Callable[[str], None]
+    ) -> Answer:
+        self.calls.append((question, k, length))
         for piece in self.pieces:
             on_text(piece)
         if self.error:
@@ -153,13 +155,20 @@ def test_default_clock_measures_real_time() -> None:
 def test_passes_trimmed_question_and_default_k() -> None:
     recorder = Recorder()
     ask(client_for(recorder), {"question": "  Vem var Anne Bonny?  "})
-    assert recorder.calls == [("Vem var Anne Bonny?", DEFAULT_K)]
+    assert recorder.calls == [("Vem var Anne Bonny?", DEFAULT_K, "short")]
 
 
 def test_passes_k() -> None:
     recorder = Recorder()
     ask(client_for(recorder), {"question": "Who?", "k": 3})
-    assert recorder.calls == [("Who?", 3)]
+    assert recorder.calls == [("Who?", 3, "short")]
+
+
+@pytest.mark.parametrize("length", ["short", "detailed"])
+def test_passes_the_answer_length(length: str) -> None:
+    recorder = Recorder()
+    ask(client_for(recorder), {"question": "Who?", "length": length})
+    assert recorder.calls == [("Who?", DEFAULT_K, length)]
 
 
 def test_non_ascii_text_is_kept() -> None:
@@ -251,6 +260,9 @@ def test_lock_is_released_after_each_answer(error: Exception | None) -> None:
         ({"question": "Who?", "k": "3"}, "k must be"),
         ({"question": "Who?", "k": 2.5}, "k must be"),
         ({"question": "Who?", "k": True}, "k must be"),
+        ({"question": "Who?", "length": "long"}, "length must be one of short, detailed"),
+        ({"question": "Who?", "length": 2}, "length must be one of"),
+        ({"question": "Who?", "length": None}, "length must be one of"),
     ],
 )
 def test_invalid_questions_are_rejected(body: Any, message: str) -> None:
@@ -346,6 +358,22 @@ def test_page_shows_the_answer_time_as_text() -> None:
     assert '<p id="timing" hidden></p>' in text
     assert "timingLine.textContent = " in text
     assert "Answered in" in text
+
+
+def test_page_offers_short_and_detailed_answers_with_short_preselected() -> None:
+    text = page()
+    assert '<input type="radio" name="length" value="short" checked>' in text
+    assert '<input type="radio" name="length" value="detailed">' in text
+    assert "length: chosenLength()" in text
+
+
+def test_page_remembers_the_length_only_locally_and_survives_blocked_storage() -> None:
+    text = page()
+    assert text.count("localStorage.") == 2
+    # Every use of storage sits in a try block, so blocked storage cannot break the page.
+    assert text.count("try {") >= 2
+    assert "sessionStorage" not in text
+    assert "document.cookie" not in text
 
 
 def test_page_only_links_sources_to_wikipedia_over_https() -> None:
