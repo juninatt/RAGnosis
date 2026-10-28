@@ -9,6 +9,24 @@ results here, newest first.
 Times depend on the machine and what else runs on it; compare them only within
 one table.
 
+## 2026-10-28: hiding the sources of declining answers (tried, not kept)
+
+To stop detailed refusals from listing unrelated sources, an answer whose first
+sentence declined ("I cannot answer…") was given no sources at all.
+
+| Answer length | 0.5.0 | With the change |
+|---|---|---|
+| short | 15 / 16 | 14 / 16 |
+| detailed | 14 / 16 | 14 / 16 |
+
+world-cup-sv passed in detailed mode, as intended, but female-pirates-en failed
+in both: the model says it cannot answer (it does not know that John Rackham is
+Calico Jack) and then names Mary Read and Anne Bonny correctly, with sources.
+Hiding those sources makes the answer worse, so the change was removed. A fix
+needs to judge whether the cited sources are relevant, for example by their
+search scores. The times in these runs are not usable: the computer slept
+during some cases.
+
 ## 2026-10-28: short and detailed answers (0.5.0)
 
 Same setup as below, rewriting `always`. `evaluate --detailed` asks for one or
