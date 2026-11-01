@@ -27,10 +27,12 @@ From 1.0, changing any of these in an incompatible way needs version 2.0:
 Not promised: the Python modules inside `ragnosis`, the page's look, and the
 prompts, which are tuned against the scorecard.
 
-**Quality:** with the default settings, a release must pass at least 14 of the
-16 known questions in `evaluation/answers.toml`. The required level lives in
-that file, so `evaluate` can tell whether a build meets it. Two failures are
-allowed for known limits of the small local model, which the changelog lists.
+**Quality:** with the default settings, a release must pass at least 85 % of
+the known questions in `evaluation/answers.toml`, rounded up to whole
+questions (14 of the first 16). The level is a share rather than a number, so
+it holds as questions are added. It lives in that file, so `evaluate` can tell
+whether a build meets it. The failures allowed are for known limits of the
+small local model, which the changelog lists.
 
 ## Consequences
 

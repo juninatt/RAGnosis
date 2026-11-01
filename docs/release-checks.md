@@ -11,7 +11,7 @@ Before tagging a release:
 **Automated**
 
 - [ ] CI is green on Linux and Windows for the commit to be tagged.
-- [ ] `uv run python -m ragnosis evaluate` reaches the required level (14 of 16)
+- [ ] `uv run python -m ragnosis evaluate` reaches the required level (85 %)
       with the default settings; add the scorecard to
       [evaluation.md](evaluation.md) if prompts, models or search changed.
 

@@ -7,9 +7,11 @@ plain rules, so a verdict is the same every time and says why it failed.
 
 from __future__ import annotations
 
+import math
 import re
 import tomllib
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Literal
 
@@ -175,15 +177,17 @@ class Scorecard:
 
 
 def load_scorecard(path: Path) -> Scorecard:
-    """Read and validate a TOML file of ``[[case]]`` tables and an optional ``required``.
+    """Read and validate a TOML file of ``[[case]]`` tables and an optional ``pass_rate``.
 
-    Without ``required``, every case must pass.
+    ``pass_rate`` is the share of cases that must pass, so adding a case does
+    not mean changing the level. The required number is rounded up; without
+    ``pass_rate``, every case must pass.
     """
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:
         raise CaseError(f"{path} is not valid TOML: {exc}") from exc
-    unknown = set(data) - {"required", "case"}
+    unknown = set(data) - {"pass_rate", "case"}
     if unknown:
         raise CaseError(f"{path} has unknown settings {sorted(unknown)}")
     tables = data.get("case")
@@ -196,11 +200,14 @@ def load_scorecard(path: Path) -> Scorecard:
     if duplicates:
         raise CaseError(f"Duplicate case ids: {duplicates}")
 
-    required = data.get("required", len(cases))
-    if not isinstance(required, int) or isinstance(required, bool):
-        raise CaseError(f"'required' must be a whole number, not {required!r}")
-    if not 1 <= required <= len(cases):
-        raise CaseError(f"'required' must be from 1 to the {len(cases)} cases, not {required}")
+    pass_rate = data.get("pass_rate", 1)
+    if not isinstance(pass_rate, int | float) or isinstance(pass_rate, bool):
+        raise CaseError(f"'pass_rate' must be a number, not {pass_rate!r}")
+    if not 0 < pass_rate <= 1:
+        raise CaseError(f"'pass_rate' must be above 0 and at most 1, not {pass_rate}")
+    # Counted as a fraction: in floats 0.55 of 100 is 55.00000000000001,
+    # which rounds up to 56.
+    required = math.ceil(Fraction(str(pass_rate)) * len(cases))
     return Scorecard(cases, required)
 
 

@@ -678,7 +678,7 @@ def test_evaluate_prints_a_scorecard_and_fails_when_a_case_fails(
 def test_full_run_passes_when_it_reaches_the_required_level(
     cases_file: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    write(cases_file, "required = 1\n" + CASES)
+    write(cases_file, "pass_rate = 0.5\n" + CASES)
 
     assert cli.main(["evaluate", "--cases", str(cases_file)]) == cli.EXIT_OK
 
@@ -688,7 +688,7 @@ def test_full_run_passes_when_it_reaches_the_required_level(
 def test_chosen_cases_must_all_pass_whatever_the_level(
     cases_file: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    write(cases_file, "required = 1\n" + CASES)
+    write(cases_file, "pass_rate = 0.5\n" + CASES)
 
     code = cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-sv"])
 

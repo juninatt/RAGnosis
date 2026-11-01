@@ -173,7 +173,7 @@ def test_loads_cases_with_defaults(tmp_path: Path) -> None:
     ("content", "message"),
     [
         ("not = [toml", "not valid TOML"),
-        ("required = 1\n", "no \\[\\[case\\]\\] tables"),
+        ("pass_rate = 1\n", "no \\[\\[case\\]\\] tables"),
         ('[[case]]\nquestion = "Q?"\nlanguage = "en"\nmentions = ["x"]\n', "non-empty 'id'"),
         ('[[case]]\nid = "a"\nquestion = " "\nlanguage = "en"\nmentions = ["x"]\n', "'question'"),
         ('[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "de"\nmentions = ["x"]\n', "language"),
@@ -225,29 +225,51 @@ TWO_CASES = (
 )
 
 
-def test_without_required_every_case_must_pass(tmp_path: Path) -> None:
+def test_without_a_pass_rate_every_case_must_pass(tmp_path: Path) -> None:
     scorecard = load_scorecard(write(tmp_path, TWO_CASES))
     assert scorecard.required == 2
     assert [case.id for case in scorecard.cases] == ["a", "b"]
 
 
-def test_reads_the_required_level(tmp_path: Path) -> None:
-    assert load_scorecard(write(tmp_path, "required = 1\n" + TWO_CASES)).required == 1
+@pytest.mark.parametrize(
+    ("value", "required"),
+    [("1", 2), ("1.0", 2), ("0.5", 1), ("0.51", 2), ("0.01", 1)],
+)
+def test_the_pass_rate_is_rounded_up_to_whole_cases(
+    tmp_path: Path, value: str, required: int
+) -> None:
+    path = write(tmp_path, f"pass_rate = {value}\n" + TWO_CASES)
+    assert load_scorecard(path).required == required
+
+
+def test_the_pass_rate_is_counted_without_float_errors(tmp_path: Path) -> None:
+    # In floats 0.55 * 100 is 55.00000000000001, which would round up to 56.
+    hundred = "".join(
+        f'[[case]]\nid = "c{n}"\nquestion = "Q?"\nlanguage = "en"\nmentions = ["x"]\n'
+        for n in range(100)
+    )
+    assert load_scorecard(write(tmp_path, "pass_rate = 0.55\n" + hundred)).required == 55
 
 
 @pytest.mark.parametrize(
     ("value", "message"),
     [
-        ("0", "from 1 to the 2 cases, not 0"),
-        ("3", "from 1 to the 2 cases, not 3"),
-        ('"1"', "whole number"),
-        ("true", "whole number"),
-        ("1.5", "whole number"),
+        ("0", "above 0 and at most 1, not 0"),
+        ("-0.5", "above 0 and at most 1, not -0.5"),
+        ("1.5", "above 0 and at most 1, not 1.5"),
+        ("2", "above 0 and at most 1, not 2"),
+        ('"0.85"', "must be a number"),
+        ("true", "must be a number"),
     ],
 )
-def test_rejects_an_impossible_required_level(tmp_path: Path, value: str, message: str) -> None:
+def test_rejects_an_impossible_pass_rate(tmp_path: Path, value: str, message: str) -> None:
     with pytest.raises(CaseError, match=message):
-        load_scorecard(write(tmp_path, f"required = {value}\n" + TWO_CASES))
+        load_scorecard(write(tmp_path, f"pass_rate = {value}\n" + TWO_CASES))
+
+
+def test_rejects_the_old_whole_number_level(tmp_path: Path) -> None:
+    with pytest.raises(CaseError, match="unknown settings \\['required'\\]"):
+        load_scorecard(write(tmp_path, "required = 1\n" + TWO_CASES))
 
 
 def test_rejects_unknown_top_level_settings(tmp_path: Path) -> None:
@@ -258,10 +280,10 @@ def test_rejects_unknown_top_level_settings(tmp_path: Path) -> None:
 # --- Guards on the committed cases ---
 
 
-def test_committed_scorecard_requires_14_of_16() -> None:
+def test_committed_scorecard_requires_85_percent() -> None:
     # The level decision 0009 sets; changing it is a decision, not a tweak.
-    scorecard = load_scorecard(REPO_ROOT / DEFAULT_CASES_FILE)
-    assert (scorecard.required, len(scorecard.cases)) == (14, 16)
+    text = (REPO_ROOT / DEFAULT_CASES_FILE).read_text(encoding="utf-8")
+    assert "\npass_rate = 0.85\n" in text
 
 
 def test_committed_cases_load() -> None:
