@@ -9,6 +9,29 @@ results here, newest first.
 Times depend on the machine and what else runs on it; compare them only within
 one table.
 
+## 2026-11-01: answers that refuse and then answer (after 1.1.0)
+
+In 1.0, female-pirates-en said it could not answer and then named Anne Bonny
+and Mary Read correctly, with sources. A check now fails such answers, and two
+questions the sources only partly answer were added.
+
+| | Passed |
+|---|---|
+| With the check | 18 / 21 |
+| With a prompt rule for partial answers (tried, not kept) | 18 / 21 |
+
+- The 1.0 failure no longer happens: female-pirates-en answers directly.
+- largest-crew-en and pompey-ships-en say they cannot answer and then give
+  context with sources, such as Blackbeard's crew of 300 men. Reading them,
+  that is right: the sources do not say which pirate had the largest crew or
+  how many ships Pompey used. Such cases are marked `partial` and may refuse
+  with context; both pass.
+- A prompt rule asking the model to answer the covered part and name what is
+  missing changed neither answer, and made svartskagg-death-sv cite the Roman
+  passages it declined, so it was removed.
+- Times are not given: other work on the computer slowed the first run about
+  threefold.
+
 ## 2026-11-01: a minimum search score (1.1.0)
 
 Same setup as below, rewriting `always`, short answers. Three cases were added
