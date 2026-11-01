@@ -302,6 +302,8 @@ def test_committed_sources_name_articles_in_the_topics_file() -> None:
     from ragnosis.settings import DEFAULT_TOPICS_FILE
     from ragnosis.topics import load_titles
 
-    titles = set(load_titles(REPO_ROOT / DEFAULT_TOPICS_FILE)) | {"Barbary corsairs"}
+    # Titles in the topics file that Wikipedia redirects, as the articles are named.
+    redirected = {"Barbary pirates": "Barbary corsairs", "Calico Jack": "John Rackham"}
+    titles = set(load_titles(REPO_ROOT / DEFAULT_TOPICS_FILE)) | set(redirected.values())
     for case in load_cases(REPO_ROOT / DEFAULT_CASES_FILE):
         assert set(case.sources) <= titles, case.id

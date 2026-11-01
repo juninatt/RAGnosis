@@ -39,7 +39,8 @@ mentions = ["Ocracoke", "Maynard", "1718"]
 id = "anne-bonny-sv"
 question = "Vem var Anne Bonny?"
 language = "sv"
-sources = ["Anne Bonny", "Calico Jack"]
+# Wikipedia's article on Calico Jack is titled "John Rackham".
+sources = ["Anne Bonny", "John Rackham"]
 mentions = ["Rackham", "Calico Jack", "irländsk", "Irland"]
 
 [[case]]
@@ -53,7 +54,7 @@ mentions = ["Rackham", "Calico Jack", "Anne Bonny"]
 id = "female-pirates-en"
 question = "Which female pirates sailed with Calico Jack?"
 language = "en"
-sources = ["Anne Bonny", "Mary Read", "Calico Jack"]
+sources = ["Anne Bonny", "Mary Read", "John Rackham"]
 mentions = ["Anne Bonny", "Mary Read"]
 
 [[case]]
