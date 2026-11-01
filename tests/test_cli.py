@@ -16,7 +16,7 @@ from factories import FakeChatModel, FakeEmbedder, make_article, make_chunk
 from starlette.testclient import TestClient
 
 from ragnosis import cli
-from ragnosis.answer import LENGTH_RULES, Answer, AnswerLength
+from ragnosis.answer import LENGTH_RULES, NOT_COVERED_TEXT, Answer, AnswerLength
 from ragnosis.article_store import ArticleStore
 from ragnosis.evaluation import Case, Verdict
 from ragnosis.llm import LLMError, LLMUnavailableError, Message, ModelNotFoundError
@@ -372,7 +372,11 @@ class FakeOllama(FakeChatModel):
 
 @pytest.fixture
 def indexed(project_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A project with both articles ingested and indexed, and a fake Ollama."""
+    """A project with both articles ingested and indexed, and a fake Ollama.
+
+    The fake embedder's scores are not E5's, so the minimum score is off.
+    """
+    monkeypatch.setenv("RAGNOSIS_MIN_SCORE", "0")
     topics = ingest_both(project_dir)
     assert cli.main(["index", "--topics", str(topics)]) == cli.EXIT_OK
     monkeypatch.setattr(cli, "OllamaClient", FakeOllama)
@@ -405,6 +409,19 @@ def test_ask_uses_model_and_address_from_settings(indexed: Path) -> None:
     )
     cli.main(["ask", "pirates"])
     assert FakeOllama.created == [("gemma4:e4b", "http://gpu-box:11434")]
+
+
+def test_ask_declines_below_the_minimum_score_from_settings(
+    indexed: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("RAGNOSIS_MIN_SCORE", "1")
+    capsys.readouterr()
+
+    assert cli.main(["ask", "Capital of Japan?"]) == cli.EXIT_OK
+
+    assert capsys.readouterr().out == NOT_COVERED_TEXT + "\n\nNo sources cited.\n"
+    # Only the rewrite reached the model, not an answer.
+    assert FakeOllama.events.count("chat") == 1
 
 
 @pytest.mark.parametrize(
@@ -605,6 +622,20 @@ def test_served_app_answers_with_the_configured_models(
     assert FakeOllama.created == [("gemma4:e4b", "http://localhost:11434")]
 
 
+def test_served_app_declines_below_the_minimum_score_from_settings(
+    indexed: Path, monkeypatch: pytest.MonkeyPatch, fake_uvicorn: FakeUvicorn
+) -> None:
+    monkeypatch.setenv("RAGNOSIS_MIN_SCORE", "1")
+    cli.main(["serve"])
+    client = TestClient(fake_uvicorn.calls[0]["app"], base_url="http://localhost")
+
+    response = client.post("/api/ask", json={"question": "Capital of Japan?"})
+
+    lines = [json.loads(line) for line in response.text.splitlines()]
+    assert [e["text"] for e in lines if e["type"] == "text"] == [NOT_COVERED_TEXT]
+    assert lines[-1]["sources"] == []
+
+
 def test_serve_without_index_exits_with_usage_code(
     fake_uvicorn: FakeUvicorn, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -703,6 +734,18 @@ def test_evaluate_passes_when_every_case_passes(
     out = capsys.readouterr().out
     assert "bonny-sv" not in out
     assert "1 of 1 passed" in out
+
+
+def test_evaluate_declines_below_the_minimum_score_and_still_shows_it(
+    cases_file: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("RAGNOSIS_MIN_SCORE", "1")
+
+    cli.main(["evaluate", "--cases", str(cases_file), "--case", "bonny-en"])
+
+    out = capsys.readouterr().out
+    assert f"answer: {NOT_COVERED_TEXT}" in out
+    assert "best 0." in out
 
 
 def test_evaluate_loads_the_model_before_the_first_case(cases_file: Path) -> None:

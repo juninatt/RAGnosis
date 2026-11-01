@@ -25,6 +25,7 @@ OLLAMA_URL_VAR = "RAGNOSIS_OLLAMA_URL"
 LLM_MODEL_VAR = "RAGNOSIS_LLM_MODEL"
 LLM_KEEP_ALIVE_VAR = "RAGNOSIS_LLM_KEEP_ALIVE"
 QUERY_REWRITE_VAR = "RAGNOSIS_QUERY_REWRITE"
+MIN_SCORE_VAR = "RAGNOSIS_MIN_SCORE"
 
 # When to rewrite a question into an English search query before retrieval
 # (docs/decisions/0008): every question, only Swedish ones, or never.
@@ -39,6 +40,10 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_LLM_MODEL = "qwen3.5:4b"
 DEFAULT_LLM_KEEP_ALIVE = DEFAULT_KEEP_ALIVE
 DEFAULT_QUERY_REWRITE: RewriteMode = "always"
+# Below this search score no passage is about the question, so it is declined
+# without the model. Set between the known questions' scores (0010); it
+# depends on the embedding model and the passages.
+DEFAULT_MIN_SCORE = 0.83
 
 # The language code becomes part of the API host name, so only accept what real
 # Wikipedia codes look like ("en", "sv", "zh-yue") and nothing that could change the URL.
@@ -64,6 +69,7 @@ class Settings:
     llm_model: str = DEFAULT_LLM_MODEL
     llm_keep_alive: str = DEFAULT_LLM_KEEP_ALIVE
     query_rewrite: RewriteMode = DEFAULT_QUERY_REWRITE
+    min_score: float = DEFAULT_MIN_SCORE
 
     def __post_init__(self) -> None:
         if not is_valid_language(self.wiki_language):
@@ -83,6 +89,8 @@ class Settings:
             raise ValueError(
                 f"Query rewrite must be one of {', '.join(REWRITE_MODES)}: {self.query_rewrite!r}"
             )
+        if not 0 <= self.min_score <= 1:
+            raise ValueError(f"Minimum score must be from 0 to 1: {self.min_score!r}")
 
     @property
     def articles_dir(self) -> Path:
@@ -108,4 +116,12 @@ class Settings:
             llm_keep_alive=env.get(LLM_KEEP_ALIVE_VAR) or DEFAULT_LLM_KEEP_ALIVE,
             # Checked in __post_init__; the cast only tells the type checker.
             query_rewrite=cast(RewriteMode, env.get(QUERY_REWRITE_VAR) or DEFAULT_QUERY_REWRITE),
+            min_score=_score(env.get(MIN_SCORE_VAR) or str(DEFAULT_MIN_SCORE)),
         )
+
+
+def _score(text: str) -> float:
+    try:
+        return float(text)
+    except ValueError:
+        raise ValueError(f"Minimum score must be a number from 0 to 1: {text!r}") from None

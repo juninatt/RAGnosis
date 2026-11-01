@@ -28,6 +28,7 @@ CODE_DEFAULTS = {
     settings.LLM_MODEL_VAR: settings.DEFAULT_LLM_MODEL,
     settings.LLM_KEEP_ALIVE_VAR: settings.DEFAULT_LLM_KEEP_ALIVE,
     settings.QUERY_REWRITE_VAR: settings.DEFAULT_QUERY_REWRITE,
+    settings.MIN_SCORE_VAR: str(settings.DEFAULT_MIN_SCORE),
 }
 
 

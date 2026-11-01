@@ -250,6 +250,7 @@ def run_ask(settings: Settings, *, question: str, k: int, length: AnswerLength =
                 llm=llm,
                 k=k,
                 rewrite=settings.query_rewrite,
+                min_score=settings.min_score,
                 length=length,
                 on_text=_show,
             )
@@ -290,6 +291,7 @@ def run_serve(settings: Settings, *, port: int) -> int:
                 llm=llm,
                 k=k,
                 rewrite=settings.query_rewrite,
+                min_score=settings.min_score,
                 length=length,
                 on_text=on_text,
             )
@@ -351,6 +353,7 @@ def run_evaluate(
                     embedder=embedder,
                     llm=llm,
                     rewrite=settings.query_rewrite,
+                    min_score=settings.min_score,
                     length=length,
                 )
             except (LLMUnavailableError, ModelNotFoundError) as exc:

@@ -13,6 +13,7 @@ from ragnosis.settings import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_KEEP_ALIVE,
     DEFAULT_LLM_MODEL,
+    DEFAULT_MIN_SCORE,
     DEFAULT_OLLAMA_URL,
     DEFAULT_QUERY_REWRITE,
     DEFAULT_TOPICS_FILE,
@@ -20,6 +21,7 @@ from ragnosis.settings import (
     EMBEDDING_MODEL_VAR,
     LLM_KEEP_ALIVE_VAR,
     LLM_MODEL_VAR,
+    MIN_SCORE_VAR,
     OLLAMA_URL_VAR,
     QUERY_REWRITE_VAR,
     TOPICS_FILE_VAR,
@@ -37,6 +39,7 @@ ALL_VARS = (
     LLM_MODEL_VAR,
     LLM_KEEP_ALIVE_VAR,
     QUERY_REWRITE_VAR,
+    MIN_SCORE_VAR,
 )
 
 
@@ -54,6 +57,28 @@ def test_query_rewrite_accepts_its_modes(value: str) -> None:
 def test_query_rewrite_rejects_other_values(value: str) -> None:
     with pytest.raises(ValueError, match="Query rewrite must be one of always, swedish, never"):
         Settings.from_env({QUERY_REWRITE_VAR: value})
+
+
+def test_min_score_defaults_to_the_measured_limit() -> None:
+    # Between the known questions' best scores (docs/evaluation.md, decision 0010).
+    assert Settings.from_env({}).min_score == DEFAULT_MIN_SCORE == 0.83
+
+
+@pytest.mark.parametrize(("value", "score"), [("0", 0.0), ("0.9", 0.9), ("1", 1.0), (".5", 0.5)])
+def test_min_score_accepts_numbers_from_0_to_1(value: str, score: float) -> None:
+    assert Settings.from_env({MIN_SCORE_VAR: value}).min_score == score
+
+
+@pytest.mark.parametrize("value", ["-0.1", "1.5", "nan", "inf"])
+def test_min_score_rejects_numbers_outside_0_to_1(value: str) -> None:
+    with pytest.raises(ValueError, match="Minimum score must be from 0 to 1"):
+        Settings.from_env({MIN_SCORE_VAR: value})
+
+
+@pytest.mark.parametrize("value", ["high", "0,83", "83%"])
+def test_min_score_rejects_text_that_is_not_a_number(value: str) -> None:
+    with pytest.raises(ValueError, match="Minimum score must be a number from 0 to 1"):
+        Settings.from_env({MIN_SCORE_VAR: value})
 
 
 def test_keep_alive_defaults_to_thirty_minutes() -> None:
