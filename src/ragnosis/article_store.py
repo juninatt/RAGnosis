@@ -50,4 +50,6 @@ class ArticleStore:
     def load(self, title: str) -> Article:
         """Load the article stored under ``title``. Raises FileNotFoundError if absent."""
         data = json.loads(self.path_for(title).read_text(encoding="utf-8"))
+        if data.get("names") is not None:
+            data["names"] = tuple(data["names"])
         return Article(**data)

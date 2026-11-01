@@ -32,6 +32,7 @@ from ragnosis.settings import Settings
 from ragnosis.topics import load_titles
 from ragnosis.vector_store import CorruptIndexError, SearchResult, VectorStore
 from ragnosis.web import create_app
+from ragnosis.wikidata import WikidataClient
 from ragnosis.wikipedia import WikipediaClient
 
 logger = logging.getLogger(__name__)
@@ -166,18 +167,26 @@ def run_ingest(settings: Settings, *, topics: Path | None, refresh: bool) -> int
     if titles is None:
         return EXIT_USAGE
 
-    with WikipediaClient(settings.wiki_language) as client:
-        report = ingest(titles, client, ArticleStore(settings.articles_dir), refresh=refresh)
+    with (
+        WikipediaClient(settings.wiki_language) as client,
+        WikidataClient(settings.wiki_language) as wikidata,
+    ):
+        report = ingest(
+            titles, client, ArticleStore(settings.articles_dir), names=wikidata, refresh=refresh
+        )
 
     logger.info(
-        "Done: %d fetched, %d already stored, %d duplicates, %d failed",
+        "Done: %d fetched, %d already stored, %d duplicates, %d failed, %d given other names",
         len(report.fetched),
         len(report.skipped),
         len(report.duplicates),
         len(report.failed),
+        len(report.named),
     )
     for title, reason in report.failed.items():
         logger.error("Failed: %r: %s", title, reason)
+    if report.names_failed is not None:
+        logger.error("Other names from Wikidata failed: %s", report.names_failed)
     return EXIT_OK if report.ok else EXIT_FAILURES
 
 

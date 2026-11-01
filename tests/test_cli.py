@@ -21,6 +21,7 @@ from ragnosis.article_store import ArticleStore
 from ragnosis.evaluation import Case, Verdict
 from ragnosis.llm import LLMError, LLMUnavailableError, Message, ModelNotFoundError
 from ragnosis.vector_store import MANIFEST_FILE, SearchResult, VectorStore
+from ragnosis.wikidata import WikidataError
 from ragnosis.wikipedia import Article, ArticleNotFoundError
 
 
@@ -50,11 +51,40 @@ class FakeWikipediaClient:
         return self.articles[title]
 
 
+class FakeWikidataClient:
+    """Stands in for WikidataClient; knows other names for some titles, or fails."""
+
+    names: dict[str, list[str]] = {}
+    error: Exception | None = None
+
+    def __init__(self, wiki_language: str = "en") -> None:
+        pass
+
+    def __enter__(self) -> FakeWikidataClient:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        pass
+
+    def fetch_names(self, titles: Sequence[str]) -> dict[str, list[str]]:
+        if self.error is not None:
+            raise self.error
+        return {title: self.names.get(title, []) for title in titles}
+
+
 @pytest.fixture(autouse=True)
 def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Run each test in an empty project folder with a fake Wikipedia and embedder."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "WikipediaClient", FakeWikipediaClient)
+    monkeypatch.setattr(cli, "WikidataClient", FakeWikidataClient)
+    monkeypatch.setattr(FakeWikidataClient, "names", {"Blackbeard": ["Svartskägg"]})
+    monkeypatch.setattr(FakeWikidataClient, "error", None)
     monkeypatch.setattr(cli, "SentenceTransformerEmbedder", lambda name: FakeEmbedder(name))
     monkeypatch.setattr(
         FakeWikipediaClient,
@@ -87,6 +117,7 @@ def test_ingest_stores_articles_and_exits_ok(project_dir: Path) -> None:
     store = ArticleStore(project_dir / "data" / "articles")
     assert store.contains("Blackbeard")
     assert store.contains("Anne Bonny")
+    assert store.load("Blackbeard").names == ("Svartskägg",)
 
 
 def test_ingest_uses_settings_from_env_file(project_dir: Path) -> None:
@@ -116,7 +147,19 @@ def test_ingest_exits_with_failure_code_when_a_title_fails(
 
     assert cli.main(["ingest", "--topics", str(topics)]) == cli.EXIT_FAILURES
     assert "Failed: 'No such pirate'" in caplog.text
-    assert "1 fetched, 0 already stored, 0 duplicates, 1 failed" in caplog.text
+    assert "1 fetched, 0 already stored, 0 duplicates, 1 failed, 1 given other names" in caplog.text
+
+
+def test_ingest_exits_with_failure_code_when_wikidata_fails(
+    project_dir: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(FakeWikidataClient, "error", WikidataError("Giving up after 4 attempts"))
+    topics = write(project_dir / "topics.txt", "Blackbeard\n")
+
+    assert cli.main(["ingest", "--topics", str(topics)]) == cli.EXIT_FAILURES
+
+    assert "Other names from Wikidata failed: Giving up after 4 attempts" in caplog.text
+    assert ArticleStore(project_dir / "data" / "articles").load("Blackbeard").names is None
 
 
 def test_second_run_skips_stored_articles_and_refresh_refetches(

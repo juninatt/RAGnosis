@@ -45,6 +45,9 @@ class Article:
     language: str
     text: str
     fetched_at: str
+    # Other names from Wikidata, used to find the article's passages. None
+    # means not fetched yet (articles stored before 1.2.0, or Wikidata failed).
+    names: tuple[str, ...] | None = None
 
 
 def _utc_now() -> datetime:

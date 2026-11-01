@@ -22,6 +22,22 @@ def test_save_then_load_round_trips(store: ArticleStore) -> None:
     assert store.load("Blackbeard") == article
 
 
+def test_other_names_round_trip(store: ArticleStore) -> None:
+    article = make_article(names=("Svartskägg", "Edward Teach"))
+    store.save("Blackbeard", article)
+    assert store.load("Blackbeard") == article
+
+
+def test_files_from_before_names_existed_still_load(store: ArticleStore) -> None:
+    store.save("Blackbeard", make_article())
+    path = store.path_for("Blackbeard")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    del data["names"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert store.load("Blackbeard").names is None
+
+
 def test_contains_reflects_saved_titles(store: ArticleStore) -> None:
     assert not store.contains("Blackbeard")
     store.save("Blackbeard", make_article())
