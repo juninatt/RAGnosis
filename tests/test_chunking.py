@@ -190,6 +190,24 @@ def test_embedding_text_names_article_and_section() -> None:
     assert chunk.embedding_text == "Blackbeard > Death\nHe was killed in 1718."
 
 
+def test_embedding_text_lists_the_other_names_after_the_title() -> None:
+    article = make_article(
+        title="Blackbeard",
+        text="== Death ==\nHe was killed in 1718.",
+        names=("Svartskägg", "Edward Teach"),
+    )
+    (chunk,) = chunk_article(article)
+    assert chunk.names == ("Svartskägg", "Edward Teach")
+    assert chunk.embedding_text == (
+        "Blackbeard (Svartskägg, Edward Teach) > Death\nHe was killed in 1718."
+    )
+
+
+def test_articles_without_names_give_chunks_without_names() -> None:
+    (chunk,) = chunk_article(make_article(names=None))
+    assert chunk.names == ()
+
+
 @pytest.mark.parametrize(
     ("max_words", "overlap_words"),
     [(0, 0), (-1, 0), (10, -1), (10, 10), (10, 11)],

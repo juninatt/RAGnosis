@@ -303,6 +303,20 @@ def test_rebuild_replaces_index_built_with_another_model(project_dir: Path) -> N
     assert VectorStore.load(project_dir / "data" / "index").embedding_model == "other/model"
 
 
+def test_index_from_an_older_version_asks_for_a_rebuild(
+    project_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    topics = ingest_both(project_dir)
+    cli.main(["index", "--topics", str(topics)])
+    manifest_path = project_dir / "data" / "index" / MANIFEST_FILE
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    write(manifest_path, json.dumps({**manifest, "format_version": 1}))
+
+    assert cli.main(["ask", "Irish pirate"]) == cli.EXIT_USAGE
+    assert "built by an older version of RAGnosis; run index --rebuild" in caplog.text
+    assert cli.main(["index", "--topics", str(topics), "--rebuild"]) == cli.EXIT_OK
+
+
 def test_index_refuses_corrupt_index(project_dir: Path, caplog: pytest.LogCaptureFixture) -> None:
     topics = ingest_both(project_dir)
     cli.main(["index", "--topics", str(topics)])

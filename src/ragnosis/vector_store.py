@@ -23,7 +23,8 @@ import numpy as np
 from ragnosis.chunking import Chunk
 from ragnosis.embeddings import Vectors
 
-FORMAT_VERSION = 1
+# 2: chunks carry their article's other names, which are part of what is embedded.
+FORMAT_VERSION = 2
 MANIFEST_FILE = "manifest.json"
 VECTORS_FILE = "vectors.npy"
 CHUNKS_FILE = "chunks.jsonl"
@@ -68,6 +69,10 @@ class VectorStore:
     def revision_of(self, page_id: int) -> int | None:
         """The article revision that was indexed, or None if the article is not indexed."""
         return self._revisions.get(page_id)
+
+    def names_of(self, page_id: int) -> tuple[str, ...]:
+        """The other names the article's chunks were embedded with."""
+        return next((chunk.names for chunk in self._chunks if chunk.page_id == page_id), ())
 
     def replace_article(
         self, page_id: int, revision_id: int, chunks: list[Chunk], vectors: Vectors
@@ -148,15 +153,20 @@ class VectorStore:
         """
         manifest = _read_json(directory / MANIFEST_FILE)
         try:
-            if manifest["format_version"] != FORMAT_VERSION:
-                raise CorruptIndexError(f"Unsupported index format {manifest['format_version']}")
+            version = manifest["format_version"]
+            if isinstance(version, int) and version < FORMAT_VERSION:
+                raise CorruptIndexError(
+                    f"The index in {directory} was built by an older version of RAGnosis"
+                )
+            if version != FORMAT_VERSION:
+                raise CorruptIndexError(f"Unsupported index format {version}")
             store = cls(manifest["embedding_model"], int(manifest["dimension"]))
             revisions = {int(page): int(rev) for page, rev in manifest["articles"].items()}
             expected = int(manifest["chunk_count"])
 
             vectors = np.load(directory / VECTORS_FILE, allow_pickle=False)
             text = (directory / CHUNKS_FILE).read_text(encoding="utf-8")
-            chunks = [Chunk(**json.loads(line)) for line in text.splitlines() if line]
+            chunks = [_chunk(json.loads(line)) for line in text.splitlines() if line]
         except (KeyError, TypeError, ValueError, AttributeError, OSError) as exc:
             raise CorruptIndexError(f"Cannot read index in {directory}: {exc}") from exc
 
@@ -172,6 +182,11 @@ class VectorStore:
         store._vectors = vectors.astype(np.float32, copy=False)
         store._revisions = revisions
         return store
+
+
+def _chunk(data: dict[str, Any]) -> Chunk:
+    """A chunk from its JSON form, where the names are a list."""
+    return Chunk(**{**data, "names": tuple(data.get("names", ()))})
 
 
 def _read_json(path: Path) -> Any:

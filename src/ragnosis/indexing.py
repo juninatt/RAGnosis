@@ -1,7 +1,7 @@
 """Bring the vector index in line with the stored articles.
 
-Only articles whose revision changed since they were indexed are embedded
-again, since embedding is the slow part. Articles that left the title list are
+Only articles whose revision or other names changed since they were indexed
+are embedded again, since embedding is the slow part. Articles that left the title list are
 removed, so the index always matches the list.
 """
 
@@ -66,7 +66,11 @@ def update_index(
 
         article = articles.load(title)
         listed_page_ids.add(article.page_id)
-        if store.revision_of(article.page_id) == article.revision_id:
+        names = article.names or ()
+        if (
+            store.revision_of(article.page_id) == article.revision_id
+            and store.names_of(article.page_id) == names
+        ):
             logger.debug("Skipping %r: already indexed at this revision", title)
             report.unchanged.append(title)
             continue

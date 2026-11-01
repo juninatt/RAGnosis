@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -87,6 +88,29 @@ def test_unchanged_articles_are_not_embedded_again(
     assert report.indexed == []
     assert embedder.document_calls == []
     assert len(store) == 3
+
+
+def test_embeds_the_other_names_with_each_passage(
+    articles: ArticleStore, store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    articles.save(
+        "Blackbeard", make_article(title="Blackbeard", text="Lead.", names=("Svartskägg",))
+    )
+    update_index(["Blackbeard"], articles, store, embedder)
+    assert embedder.document_calls == [["Blackbeard (Svartskägg) > Introduction\nLead."]]
+
+
+def test_changed_names_are_embedded_again_at_the_same_revision(
+    articles: ArticleStore, store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    update_index(["Blackbeard"], articles, store, embedder)
+    articles.save("Blackbeard", replace(BLACKBEARD, names=("Svartskägg",)))
+    embedder.document_calls.clear()
+
+    report = update_index(["Blackbeard"], articles, store, embedder)
+
+    assert report.indexed == ["Blackbeard"]
+    assert store.names_of(1) == ("Svartskägg",)
 
 
 def test_new_revision_is_reindexed_in_place(

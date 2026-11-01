@@ -67,15 +67,21 @@ class Chunk:
     position: int
     text: str
     url: str
+    # The article's other names from Wikidata, such as "Svartskägg" (0011).
+    names: tuple[str, ...] = ()
 
     @property
     def embedding_text(self) -> str:
         """The passage prefixed with where it comes from.
 
         "He was killed in 1718." says nothing about who "he" is; the article
-        title and section give the embedding that missing context.
+        title and section give the embedding that missing context, and the
+        other names let a question that uses one of them find the passage.
         """
-        return f"{self.article_title}{SECTION_SEPARATOR}{self.section}\n{self.text}"
+        title = self.article_title
+        if self.names:
+            title += f" ({', '.join(self.names)})"
+        return f"{title}{SECTION_SEPARATOR}{self.section}\n{self.text}"
 
 
 def split_sections(text: str) -> list[Section]:
@@ -147,6 +153,7 @@ def chunk_article(
                     position=position,
                     text=text,
                     url=article.url,
+                    names=article.names or (),
                 )
             )
     return chunks

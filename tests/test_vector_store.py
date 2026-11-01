@@ -181,6 +181,29 @@ def test_round_trip_keeps_non_ascii_text(tmp_path: Path) -> None:
     assert VectorStore.load(tmp_path).search(unit(1, 0))[0].chunk == chunk
 
 
+def test_round_trip_keeps_other_names(tmp_path: Path) -> None:
+    store = VectorStore("fake-model", 2)
+    chunk = make_chunk(names=("Svartskägg", "Edward Teach"))
+    store.replace_article(1, 1, [chunk], np.array([unit(1, 0)]))
+    store.save(tmp_path)
+
+    loaded = VectorStore.load(tmp_path)
+
+    assert loaded.search(unit(1, 0))[0].chunk == chunk
+    assert loaded.names_of(1) == ("Svartskägg", "Edward Teach")
+
+
+def test_names_of_an_article_not_indexed_are_empty(store: VectorStore) -> None:
+    assert store.names_of(99) == ()
+
+
+def test_index_from_an_older_version_asks_for_a_rebuild(store: VectorStore, tmp_path: Path) -> None:
+    store.save(tmp_path)
+    edit_manifest(format_version=1)(tmp_path)
+    with pytest.raises(CorruptIndexError, match="built by an older version of RAGnosis"):
+        VectorStore.load(tmp_path)
+
+
 def test_save_replaces_earlier_save_and_leaves_no_temp_files(
     store: VectorStore, tmp_path: Path
 ) -> None:
