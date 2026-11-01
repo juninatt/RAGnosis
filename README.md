@@ -10,6 +10,11 @@ everything locally keeps it free and private.
 
 The first dataset covers pirates and antiquity, with a focus on Europe.
 
+![The RAGnosis web page answering "How did Julius Caesar deal with the pirates who kidnapped him?" in five sentences, each citing source [1] or [2], above a list of the two cited Wikipedia sections: Cilician pirates and Julius Caesar.](docs/images/web-ui.png)
+
+*An answer drawn from two articles, with its sources. Questions in Swedish are
+answered in Swedish.*
+
 > **Status:** stable. Questions are answered from the indexed articles, on the
 > command line or in a local web UI. What stays compatible within 1.x is in
 > [decision 0009](docs/decisions/0009-what-1-0-promises.md).
@@ -22,7 +27,7 @@ The first dataset covers pirates and antiquity, with a focus on Europe.
 3. **Ask:** embed the question, retrieve the closest passages and let the
    language model answer from them.
 
-The reasons behind the stack are in [docs/decisions](docs/decisions/).
+The reasons behind the stack are in [docs/decisions](docs/decisions).
 
 ## Getting started
 

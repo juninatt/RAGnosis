@@ -24,6 +24,8 @@ Before tagging a release:
       and with detailed answers; check that the answer streams in, sources
       link to Wikipedia, the time line shows, and the length choice is
       remembered after a reload. Look at it in dark mode and at phone width.
+      If the page looks different from the screenshot in the README
+      (`docs/images/web-ui.png`), take a new one.
 - [ ] `CHANGELOG.md` has a section for the version, and `pyproject.toml`
       carries the version.
 
