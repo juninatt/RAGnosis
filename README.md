@@ -185,7 +185,7 @@ Answers the known questions in [`evaluation/answers.toml`](evaluation/answers.to
 with the real models and checks each answer: does it cite the right article,
 mention the expected facts, use the question's language, or decline when the
 sources do not cover the question? Prints PASS or FAIL per question with the
-reasons, and a summary. `--case ID` runs only some questions, and `--detailed`
+reasons and the search score of the best passage, and a summary. `--case ID` runs only some questions, and `--detailed`
 scores detailed answers. A full run passes (exit code 0) when it reaches the
 `pass_rate` in the cases file, 85 % of the questions; a run of chosen cases
 passes when all of them do. A full run takes 10 to 15 minutes. Compare runs before

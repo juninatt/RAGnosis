@@ -371,8 +371,15 @@ def run_evaluate(
 
 
 def format_verdict(verdict: Verdict, seconds: float) -> str:
-    """One case: PASS or FAIL with its time, and for a failure why and how it began."""
-    line = f"{'PASS' if verdict.passed else 'FAIL'}  {verdict.case.id:<28} {seconds:4.0f} s\n"
+    """One case: PASS or FAIL with its time, and for a failure why and how it began.
+
+    The score of the best passage shows how close the search came, which is
+    what a limit on relevance would be set from.
+    """
+    passages = verdict.answer.passages
+    best = f"{max(r.score for r in passages):.3f}" if passages else "-"
+    status = "PASS" if verdict.passed else "FAIL"
+    line = f"{status}  {verdict.case.id:<28} {seconds:4.0f} s  best {best}\n"
     if verdict.passed:
         return line
     details = "".join(f"      - {problem}\n" for problem in verdict.problems)

@@ -667,7 +667,7 @@ def test_evaluate_prints_a_scorecard_and_fails_when_a_case_fails(
 
     out = capsys.readouterr().out
     assert "PASS  bonny-en" in out
-    assert "  31 s" in out
+    assert "  31 s  best " in out
     assert "FAIL  bonny-sv" in out
     assert "- is in en, expected sv" in out
     assert "- mentions none of ['irländsk']" in out
@@ -801,6 +801,22 @@ def test_format_verdict_shortens_long_answers() -> None:
     preview = cli.format_verdict(verdict, 5.0).splitlines()[-1]
     assert preview.endswith("…")
     assert len(preview) <= len("      answer: ") + cli.PREVIEW_CHARS + 1
+
+
+def test_format_verdict_shows_the_best_search_score() -> None:
+    case = Case(id="teach", question="Q?", language="en", mentions=("x",))
+    passages = [
+        SearchResult(make_chunk(article_title="Piracy"), 0.8),
+        SearchResult(make_chunk(article_title="Blackbeard"), 0.8766),
+    ]
+    verdict = Verdict(case, Answer("Q?", "x [2]", passages))
+    assert cli.format_verdict(verdict, 31.0) == f"PASS  {'teach':<28}   31 s  best 0.877\n"
+
+
+def test_format_verdict_without_passages_shows_no_score() -> None:
+    case = Case(id="none", question="Q?", language="en", mentions=("x",))
+    verdict = Verdict(case, Answer("Q?", "", []), ["mentions none of ['x']"])
+    assert cli.format_verdict(verdict, 5.0).splitlines()[0].endswith("5 s  best -")
 
 
 def test_format_sources_lists_cited_passages_in_citation_order() -> None:
