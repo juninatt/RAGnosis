@@ -6,6 +6,40 @@ Notable changes per release. The format follows
 is set by [decision 0009](docs/decisions/0009-what-1-0-promises.md); before
 it, commands, settings and the index format changed between minor versions.
 
+## [1.1.0] - 2026-11-01
+
+Questions outside the topics are declined without unrelated sources.
+
+### Added
+
+- `RAGNOSIS_MIN_SCORE` (default 0.83): when no passage scores this high, the
+  question is declined without the model and without sources, in about 6
+  seconds. Decision 0010 explains how the default was measured.
+- `evaluate` shows the search score of the best passage for every question.
+- Three known questions close to the edge of the topics.
+
+### Changed
+
+- The required level in `evaluation/answers.toml` is a share, `pass_rate`
+  (85 %), instead of a number, so it holds as questions are added. The old
+  `required` is no longer read.
+
+### Fixed
+
+- Answers to questions outside the topics no longer cite unrelated sources.
+- Two known questions now accept the article on Calico Jack, which Wikipedia
+  names John Rackham.
+
+### Known issues
+
+- Names translated into Swedish, such as "Svartskägg" for Blackbeard, are not
+  found.
+- A question just below the minimum score is declined although a passage
+  covers it; the margin measured is small (0.811 against 0.845).
+- Swedish answers have small language errors, such as "osmanlig" for
+  "osmansk".
+- An answer takes 30 to 60 seconds on a laptop CPU.
+
 ## [1.0.0] - 2026-10-28
 
 First stable release: 0.6.0 passed the test period without new problems.
@@ -136,6 +170,7 @@ First working pipeline step: articles from Wikipedia.
   (pirates and antiquity in Europe) as plain text.
 - Settings in env files, central logging, and CI on Linux and Windows.
 
+[1.1.0]: https://github.com/juninatt/RAGnosis/releases/tag/v1.1.0
 [1.0.0]: https://github.com/juninatt/RAGnosis/releases/tag/v1.0.0
 [0.6.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.6.0
 [0.5.0]: https://github.com/juninatt/RAGnosis/releases/tag/v0.5.0
