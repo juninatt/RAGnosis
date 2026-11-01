@@ -124,6 +124,25 @@ language = "sv"
 sources = ["Fall of the Western Roman Empire"]
 mentions = ["476"]
 
+# --- Partly covered ---
+# The sources answer part of the question. A good answer gives that part and
+# says what is missing, without claiming it cannot answer.
+
+[[case]]
+id = "largest-crew-en"
+question = "Which pirate had the largest crew?"
+language = "en"
+sources = ["Blackbeard", "Golden Age of Piracy"]
+mentions = ["300"]
+
+[[case]]
+id = "pompey-ships-en"
+# The best passage scores 0.830, right at the default minimum score.
+question = "How many ships did Pompey use against the pirates?"
+language = "en"
+sources = ["Cilician pirates", "Lex Gabinia de piratis persequendis", "Roman navy", "Pompey"]
+mentions = ["thirteen", "13"]
+
 # --- Outside the sources ---
 
 [[case]]
