@@ -17,6 +17,8 @@ from ragnosis.answer import (
     LENGTH_RULES,
     MAX_QUERY_CHARS,
     NO_PASSAGES_TEXT,
+    NOT_COVERED_TEXT,
+    NOT_COVERED_TEXT_SV,
     REWRITE_EXAMPLES,
     REWRITE_PROMPT,
     SAME_LANGUAGE_RULE,
@@ -31,6 +33,7 @@ from ragnosis.answer import (
     should_rewrite,
     system_prompt,
 )
+from ragnosis.evaluation import Case, Language, check
 from ragnosis.llm import LLMError, Message
 from ragnosis.settings import RewriteMode
 from ragnosis.vector_store import SearchResult, VectorStore
@@ -300,6 +303,74 @@ def test_works_without_a_callback_on_an_empty_index(embedder: FakeEmbedder) -> N
     empty = VectorStore(embedder.model_name, embedder.dimension)
     answer = ask("Teach?", store=empty, embedder=embedder, llm=FakeChatModel())
     assert answer.text == NO_PASSAGES_TEXT
+
+
+# --- Minimum search score ---
+
+
+def test_declines_without_the_model_when_no_passage_scores_high_enough(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    llm = FakeChatModel()
+    received: list[str] = []
+
+    answer = ask(
+        "Capital of Japan?",
+        store=store,
+        embedder=embedder,
+        llm=llm,
+        min_score=0.5,
+        on_text=received.append,
+    )
+
+    assert answer.text == NOT_COVERED_TEXT
+    assert received == [NOT_COVERED_TEXT]
+    assert answer.cited == []
+    assert llm.prompts == []
+    # Kept so that evaluate can show how close the search came.
+    assert answer.passages
+    assert max(r.score for r in answer.passages) < 0.5
+
+
+def test_declines_swedish_questions_in_swedish(store: VectorStore, embedder: FakeEmbedder) -> None:
+    answer = ask("Vem vann VM?", store=store, embedder=embedder, llm=FakeChatModel(), min_score=0.5)
+    assert answer.text == NOT_COVERED_TEXT_SV
+
+
+@pytest.mark.parametrize(
+    ("text", "language"), [(NOT_COVERED_TEXT, "en"), (NOT_COVERED_TEXT_SV, "sv")]
+)
+def test_the_fixed_declines_pass_the_evaluation_checks(text: str, language: Language) -> None:
+    case = Case(id="outside", question="Q?", language=language, declines=True)
+    assert check(case, Answer("Q?", text, [result("Piracy")])).passed
+
+
+def test_answers_when_the_best_passage_reaches_the_minimum(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    question = "Teach was killed at Ocracoke Inlet in 1718."
+    llm = FakeChatModel("At Ocracoke [1].")
+
+    # The question is the passage's own text, so the best score is 1.
+    answer = ask(question, store=store, embedder=embedder, llm=llm, min_score=0.999)
+
+    assert answer.text == "At Ocracoke [1]."
+    assert len(llm.prompts) == 1
+
+
+def test_the_minimum_is_compared_with_the_rewritten_query(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    llm = ScriptedChatModel("Teach was killed at Ocracoke Inlet in 1718.", "At Ocracoke [1].")
+    answer = ask(
+        "Hur dog Svartskägg?",
+        store=store,
+        embedder=embedder,
+        llm=llm,
+        rewrite="always",
+        min_score=0.999,
+    )
+    assert answer.text == "At Ocracoke [1]."
 
 
 # --- Rewriting the question for search ---

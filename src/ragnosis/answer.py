@@ -52,6 +52,11 @@ SWEDISH_RULE = (
     "The question is in Swedish: answer in Swedish (svenska), not in Norwegian, Danish or English."
 )
 NO_PASSAGES_TEXT = "There are no indexed passages to answer from; run ingest and index first."
+# When even the best passage scores below the minimum, none is about the
+# question: the model would decline anyway, but often cites the passages while
+# doing so (0010). Answering without it gives no sources and is faster.
+NOT_COVERED_TEXT = "I cannot answer from the sources: none of them is relevant to the question."
+NOT_COVERED_TEXT_SV = "Jag kan inte svara utifrån källorna: ingen av dem är relevant för frågan."
 
 # Rewriting the question into an English search query fixes searches the
 # embedding model gets wrong, such as Swedish names ("Svartskägg" for
@@ -196,12 +201,15 @@ def ask(
     k: int = DEFAULT_K,
     rewrite: RewriteMode = "never",
     length: AnswerLength = "short",
+    min_score: float = 0.0,
     on_text: Callable[[str], None] | None = None,
 ) -> Answer:
     """Retrieve the ``k`` best passages and have ``llm`` answer from them.
 
     With ``rewrite``, the passages are found with an English search query the
     model writes first; the answer is still written for the original question.
+    When no passage scores at least ``min_score``, the question is declined
+    without the model; the passages are kept, so their scores can be shown.
     ``length`` asks for a short answer or a detailed one of a paragraph or two.
     ``on_text`` receives the answer piece by piece while it is written, so a
     caller can show it immediately instead of after the whole minute.
@@ -225,6 +233,14 @@ def ask(
         if on_text:
             on_text(NO_PASSAGES_TEXT)
         return Answer(question, NO_PASSAGES_TEXT, [], search_query)
+
+    best = max(result.score for result in passages)
+    if best < min_score:
+        logger.info("Declining: the best passage scores %.3f, below %.3f", best, min_score)
+        text = NOT_COVERED_TEXT_SV if is_swedish(question) else NOT_COVERED_TEXT
+        if on_text:
+            on_text(text)
+        return Answer(question, text, passages, search_query)
 
     pieces: list[str] = []
     for piece in llm.stream_chat(
