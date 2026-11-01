@@ -112,6 +112,31 @@ def test_norwegian_answer_to_swedish_question_is_reported() -> None:
     assert check(BLACKBEARD_SV, answer(text)).problems == ["is in no/da, expected sv"]
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I cannot answer how he died. He was killed at Ocracoke in 1718 [1].",
+        "The sources say he died at Ocracoke in 1718 [1], but I can't answer why.",
+    ],
+)
+def test_answer_that_refuses_and_then_answers_is_reported(text: str) -> None:
+    case = Case(id="teach", question="How did Teach die?", language="en", sources=("Blackbeard",))
+    verdict = check(case, answer(text))
+    assert verdict.problems == ["says it cannot answer, then answers with sources"]
+
+
+def test_swedish_answer_that_refuses_and_then_answers_is_reported() -> None:
+    text = "Jag kan inte svara säkert, men han dödades vid Ocracoke 1718 [1]."
+    assert check(BLACKBEARD_SV, answer(text)).problems == [
+        "says it cannot answer, then answers with sources"
+    ]
+
+
+def test_partial_answer_that_names_a_missing_detail_passes() -> None:
+    text = "Han dödades vid Ocracoke 1718 [1]. Vem som sköt honom nämns inte i källorna."
+    assert check(BLACKBEARD_SV, answer(text)).passed
+
+
 def test_every_problem_is_reported() -> None:
     verdict = check(BLACKBEARD_SV, answer("He was famous and the sea was his home."))
     assert len(verdict.problems) == 3

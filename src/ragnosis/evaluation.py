@@ -92,6 +92,10 @@ _DECLINE_PHRASES = (
     "finns ingen information",
     "nämns inte",
 )
+# Phrases that refuse the whole question. "Not mentioned" may describe one
+# missing detail of a partial answer; "cannot answer" followed by an answer
+# with sources contradicts itself.
+_REFUSAL_PHRASES = ("cannot answer", "can't answer", "kan inte svara")
 
 
 class CaseError(ValueError):
@@ -161,6 +165,8 @@ def check(case: Case, answer: Answer) -> Verdict:
             problems.append(f"cites {found}, expected one of {list(case.sources)}")
         if case.mentions and not any(m.lower() in text for m in case.mentions):
             problems.append(f"mentions none of {list(case.mentions)}")
+        if cited_titles and any(phrase in text for phrase in _REFUSAL_PHRASES):
+            problems.append("says it cannot answer, then answers with sources")
 
     language = answer_language(answer.text)
     if language != case.language:
