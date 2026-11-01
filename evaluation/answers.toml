@@ -107,7 +107,7 @@ mentions = ["Hannibal"]
 id = "lex-gabinia-sv"
 question = "Vilken lag gav Pompejus makt att bekämpa pirater?"
 language = "sv"
-sources = ["Lex Gabinia", "Pompey", "Cilician pirates"]
+sources = ["Lex Gabinia de piratis persequendis", "Pompey", "Cilician pirates"]
 mentions = ["Gabinia"]
 
 [[case]]

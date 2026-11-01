@@ -298,12 +298,18 @@ def test_committed_cases_cover_both_languages_and_declining() -> None:
 
 
 def test_committed_sources_name_articles_in_the_topics_file() -> None:
-    # A typo in a source title would make a case impossible to pass.
+    # A typo in a source title would make a case impossible to pass, and so
+    # would a title Wikipedia redirects: answers cite the article's own title.
     from ragnosis.settings import DEFAULT_TOPICS_FILE
     from ragnosis.topics import load_titles
 
-    # Titles in the topics file that Wikipedia redirects, as the articles are named.
-    redirected = {"Barbary pirates": "Barbary corsairs", "Calico Jack": "John Rackham"}
-    titles = set(load_titles(REPO_ROOT / DEFAULT_TOPICS_FILE)) | set(redirected.values())
+    redirected = {
+        "Barbary pirates": "Barbary corsairs",
+        "Calico Jack": "John Rackham",
+        "Lex Gabinia": "Lex Gabinia de piratis persequendis",
+        "Republic of Pirates": "Flying Gang",
+    }
+    topics = set(load_titles(REPO_ROOT / DEFAULT_TOPICS_FILE))
+    titles = (topics - set(redirected)) | set(redirected.values())
     for case in load_cases(REPO_ROOT / DEFAULT_CASES_FILE):
         assert set(case.sources) <= titles, case.id
