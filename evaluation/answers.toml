@@ -89,6 +89,31 @@ language = "sv"
 sources = ["Piracy"]
 mentions = ["Guangdong", "Qing", "1804", "1810"]
 
+# Asked by another name than the article's title, found by the names from
+# Wikidata stored with the passages (decision 0011).
+
+[[case]]
+id = "calico-jack-en"
+question = "Who was Calico Jack?"
+language = "en"
+sources = ["John Rackham"]
+mentions = ["Rackham"]
+
+[[case]]
+id = "black-bart-en"
+# Searching for the question alone scores 0.819, below the minimum score.
+question = "Who was Black Bart?"
+language = "en"
+sources = ["Bartholomew Roberts"]
+mentions = ["Bartholomew Roberts", "Roberts"]
+
+[[case]]
+id = "kapten-kidd-sv"
+question = "Vem var Kapten Kidd?"
+language = "sv"
+sources = ["William Kidd"]
+mentions = ["1701", "hängd", "hängdes", "avrättad", "avrättades", "skotsk", "Skottland"]
+
 # --- Antiquity ---
 
 [[case]]

@@ -25,14 +25,11 @@ TOP_K = 5
 CASES = [
     ("How did Blackbeard die?", {"Blackbeard"}),
     ("Hur dog Blackbeard?", {"Blackbeard"}),
-    pytest.param(
-        "Hur dog Svartskägg?",
-        {"Blackbeard"},
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason="the model does not map translated names (Svartskägg) to the English ones",
-        ),
-    ),
+    # Found by the other names from Wikidata stored with the passages (0011).
+    ("Hur dog Svartskägg?", {"Blackbeard"}),
+    ("Who was Calico Jack?", {"John Rackham"}),
+    ("Who was Black Bart?", {"Bartholomew Roberts"}),
+    ("Vem var Kapten Kidd?", {"William Kidd"}),
     ("Vilken flagga hade pirater?", {"Jolly Roger"}),
     ("Which female pirates sailed with Calico Jack?", {"Anne Bonny", "Mary Read", "John Rackham"}),
     ("Who led the Carthaginian army across the Alps?", {"Hannibal", "Punic Wars"}),
