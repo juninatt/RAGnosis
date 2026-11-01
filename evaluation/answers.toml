@@ -78,6 +78,14 @@ language = "sv"
 sources = ["Klaus Störtebeker", "Victual Brothers"]
 mentions = ["Vitalie", "Victual", "Hansa", "Östersjön"]
 
+[[case]]
+id = "zheng-yi-sao-sv"
+# Covered only by a few sentences in Piracy, close to the edge of the topics.
+question = "Vem var Zheng Yi Sao?"
+language = "sv"
+sources = ["Piracy"]
+mentions = ["Guangdong", "Qing", "1804", "1810"]
+
 # --- Antiquity ---
 
 [[case]]
@@ -127,4 +135,19 @@ declines = true
 id = "world-cup-sv"
 question = "Vem vann fotbolls-VM 2022?"
 language = "sv"
+declines = true
+
+# Close to the topics but not in them: a pirate no article mentions, and an
+# emperor whose question resembles passages about Rome's first emperor.
+
+[[case]]
+id = "sadie-farrell-sv"
+question = "Vem var Sadie Farrell?"
+language = "sv"
+declines = true
+
+[[case]]
+id = "china-emperor-en"
+question = "Who was the first emperor of China?"
+language = "en"
 declines = true
