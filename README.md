@@ -217,6 +217,7 @@ Real environment variables override both.
 | `RAGNOSIS_LLM_KEEP_ALIVE` | `30m` | How long Ollama keeps the model loaded after an answer, e.g. `30m`, `1h`, or `-1` for always. |
 | `RAGNOSIS_QUERY_REWRITE` | `always` | When questions are rewritten into English search keywords: `always`, `swedish` or `never`. |
 | `RAGNOSIS_MIN_SCORE` | `0.83` | The search score (0 to 1) below which no passage counts as relevant and the question is declined without the model. |
+| `RAGNOSIS_NAME_LANGUAGES` | `en,sv` | Languages of the other names fetched from Wikidata, such as Svartskägg for Blackbeard, that help search find articles. |
 
 ## Development
 

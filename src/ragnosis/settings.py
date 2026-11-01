@@ -26,6 +26,7 @@ LLM_MODEL_VAR = "RAGNOSIS_LLM_MODEL"
 LLM_KEEP_ALIVE_VAR = "RAGNOSIS_LLM_KEEP_ALIVE"
 QUERY_REWRITE_VAR = "RAGNOSIS_QUERY_REWRITE"
 MIN_SCORE_VAR = "RAGNOSIS_MIN_SCORE"
+NAME_LANGUAGES_VAR = "RAGNOSIS_NAME_LANGUAGES"
 
 # When to rewrite a question into an English search query before retrieval
 # (docs/decisions/0008): every question, only Swedish ones, or never.
@@ -44,6 +45,9 @@ DEFAULT_QUERY_REWRITE: RewriteMode = "always"
 # without the model. Set between the known questions' scores (0010); it
 # depends on the embedding model and the passages.
 DEFAULT_MIN_SCORE = 0.83
+# The languages of the other names fetched from Wikidata (0011): those the
+# questions are asked in.
+DEFAULT_NAME_LANGUAGES = ("en", "sv")
 
 # The language code becomes part of the API host name, so only accept what real
 # Wikipedia codes look like ("en", "sv", "zh-yue") and nothing that could change the URL.
@@ -70,6 +74,7 @@ class Settings:
     llm_keep_alive: str = DEFAULT_LLM_KEEP_ALIVE
     query_rewrite: RewriteMode = DEFAULT_QUERY_REWRITE
     min_score: float = DEFAULT_MIN_SCORE
+    name_languages: tuple[str, ...] = DEFAULT_NAME_LANGUAGES
 
     def __post_init__(self) -> None:
         if not is_valid_language(self.wiki_language):
@@ -91,6 +96,10 @@ class Settings:
             )
         if not 0 <= self.min_score <= 1:
             raise ValueError(f"Minimum score must be from 0 to 1: {self.min_score!r}")
+        if not self.name_languages or not all(map(is_valid_language, self.name_languages)):
+            raise ValueError(
+                f"Name languages must be language codes like en,sv: {self.name_languages!r}"
+            )
 
     @property
     def articles_dir(self) -> Path:
@@ -117,7 +126,13 @@ class Settings:
             # Checked in __post_init__; the cast only tells the type checker.
             query_rewrite=cast(RewriteMode, env.get(QUERY_REWRITE_VAR) or DEFAULT_QUERY_REWRITE),
             min_score=_score(env.get(MIN_SCORE_VAR) or str(DEFAULT_MIN_SCORE)),
+            name_languages=_languages(env.get(NAME_LANGUAGES_VAR)) or DEFAULT_NAME_LANGUAGES,
         )
+
+
+def _languages(text: str | None) -> tuple[str, ...]:
+    """Comma-separated language codes, ignoring spaces: "en, sv" is ("en", "sv")."""
+    return tuple(code.strip() for code in (text or "").split(",") if code.strip())
 
 
 def _score(text: str) -> float:

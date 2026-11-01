@@ -14,6 +14,7 @@ from ragnosis.settings import (
     DEFAULT_LLM_KEEP_ALIVE,
     DEFAULT_LLM_MODEL,
     DEFAULT_MIN_SCORE,
+    DEFAULT_NAME_LANGUAGES,
     DEFAULT_OLLAMA_URL,
     DEFAULT_QUERY_REWRITE,
     DEFAULT_TOPICS_FILE,
@@ -22,6 +23,7 @@ from ragnosis.settings import (
     LLM_KEEP_ALIVE_VAR,
     LLM_MODEL_VAR,
     MIN_SCORE_VAR,
+    NAME_LANGUAGES_VAR,
     OLLAMA_URL_VAR,
     QUERY_REWRITE_VAR,
     TOPICS_FILE_VAR,
@@ -40,6 +42,7 @@ ALL_VARS = (
     LLM_KEEP_ALIVE_VAR,
     QUERY_REWRITE_VAR,
     MIN_SCORE_VAR,
+    NAME_LANGUAGES_VAR,
 )
 
 
@@ -79,6 +82,29 @@ def test_min_score_rejects_numbers_outside_0_to_1(value: str) -> None:
 def test_min_score_rejects_text_that_is_not_a_number(value: str) -> None:
     with pytest.raises(ValueError, match="Minimum score must be a number from 0 to 1"):
         Settings.from_env({MIN_SCORE_VAR: value})
+
+
+def test_name_languages_default_to_english_and_swedish() -> None:
+    assert Settings.from_env({}).name_languages == DEFAULT_NAME_LANGUAGES == ("en", "sv")
+
+
+@pytest.mark.parametrize(
+    ("value", "languages"),
+    [("sv", ("sv",)), ("en,sv,de", ("en", "sv", "de")), (" sv , en ", ("sv", "en"))],
+)
+def test_name_languages_are_read_as_a_list(value: str, languages: tuple[str, ...]) -> None:
+    assert Settings.from_env({NAME_LANGUAGES_VAR: value}).name_languages == languages
+
+
+@pytest.mark.parametrize("value", ["EN", "en;sv", "en,sv.evil.com"])
+def test_name_languages_reject_other_values(value: str) -> None:
+    with pytest.raises(ValueError, match="Name languages must be language codes"):
+        Settings.from_env({NAME_LANGUAGES_VAR: value})
+
+
+def test_no_name_languages_are_rejected() -> None:
+    with pytest.raises(ValueError, match="Name languages"):
+        Settings(name_languages=())
 
 
 def test_keep_alive_defaults_to_thirty_minutes() -> None:

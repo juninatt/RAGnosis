@@ -169,7 +169,7 @@ def run_ingest(settings: Settings, *, topics: Path | None, refresh: bool) -> int
 
     with (
         WikipediaClient(settings.wiki_language) as client,
-        WikidataClient(settings.wiki_language) as wikidata,
+        WikidataClient(settings.wiki_language, settings.name_languages) as wikidata,
     ):
         report = ingest(
             titles, client, ArticleStore(settings.articles_dir), names=wikidata, refresh=refresh

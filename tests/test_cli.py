@@ -56,9 +56,10 @@ class FakeWikidataClient:
 
     names: dict[str, list[str]] = {}
     error: Exception | None = None
+    name_languages: list[tuple[str, ...]] = []
 
-    def __init__(self, wiki_language: str = "en") -> None:
-        pass
+    def __init__(self, wiki_language: str = "en", name_languages: tuple[str, ...] = ()) -> None:
+        self.name_languages.append(name_languages)
 
     def __enter__(self) -> FakeWikidataClient:
         return self
@@ -85,6 +86,7 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(cli, "WikidataClient", FakeWikidataClient)
     monkeypatch.setattr(FakeWikidataClient, "names", {"Blackbeard": ["Svartskägg"]})
     monkeypatch.setattr(FakeWikidataClient, "error", None)
+    monkeypatch.setattr(FakeWikidataClient, "name_languages", [])
     monkeypatch.setattr(cli, "SentenceTransformerEmbedder", lambda name: FakeEmbedder(name))
     monkeypatch.setattr(
         FakeWikipediaClient,
@@ -131,6 +133,16 @@ def test_ingest_uses_settings_from_env_file(project_dir: Path) -> None:
 
     assert ArticleStore(project_dir / "store" / "articles").contains("Blackbeard")
     assert FakeWikipediaClient.languages == ["sv"]
+    assert FakeWikidataClient.name_languages == [("en", "sv")]
+
+
+def test_ingest_fetches_names_in_the_configured_languages(project_dir: Path) -> None:
+    write(project_dir / ".env", "RAGNOSIS_NAME_LANGUAGES=sv\n")
+    topics = write(project_dir / "topics.txt", "Blackbeard\n")
+
+    cli.main(["ingest", "--topics", str(topics)])
+
+    assert FakeWikidataClient.name_languages == [("sv",)]
 
 
 def test_topics_option_overrides_settings(project_dir: Path) -> None:
