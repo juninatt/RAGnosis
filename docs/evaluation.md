@@ -9,6 +9,40 @@ results here, newest first.
 Times depend on the machine and what else runs on it; compare them only within
 one table.
 
+## 2026-11-01: a minimum search score (1.1.0)
+
+Same setup as below, rewriting `always`, short answers. Three cases were added
+close to the edge of the topics, and the level became 85 % (17 of 19). The
+best search score of each case decided the default minimum score of 0.83
+([decision 0010](decisions/0010-minimum-search-score.md)).
+
+| | Passed | Median per answer | Total |
+|---|---|---|---|
+| Without a minimum | 15 / 19 | 34 s | 10.9 min |
+| **Minimum 0.83** (default) | **18 / 19** | 33 s | 9.1 min |
+
+| Case | Should | Best score | Without | 0.83 |
+|---|---|---|---|---|
+| 11 other cases | answer | 0.864–0.910 | ✓ | ✓ |
+| female-pirates-en | answer | 0.879 | ✗ | ✓ |
+| svartskagg-death-sv | answer | 0.858 | ✗ | ✗ |
+| zheng-yi-sao-sv | answer | 0.845 | ✓ | ✓ |
+| china-emperor-en | decline | 0.811 | ✗ | ✓ |
+| japan-capital-en | decline | 0.797 | ✓ | ✓ |
+| world-cup-sv | decline | 0.789 | ✓ | ✓ |
+| sadie-farrell-sv | decline | 0.766 | ✗ | ✓ |
+
+- Answers that should be declined scored at most 0.811, those that should be
+  answered at least 0.845. The margin is small.
+- china-emperor-en and sadie-farrell-sv declined correctly without the
+  minimum but cited the passages anyway. Below the minimum the model is not
+  run, so nothing is cited, and the answer takes about 6 s instead of 30.
+- female-pirates-en was right in both runs; the case did not accept the
+  article on Calico Jack, which Wikipedia names John Rackham.
+- svartskagg-death-sv still fails: the question is rewritten to the Black
+  Death, and passages about Rome score 0.858. Swedish names in the index are
+  planned for that.
+
 ## 2026-10-28: hiding the sources of declining answers (tried, not kept)
 
 To stop detailed refusals from listing unrelated sources, an answer whose first
