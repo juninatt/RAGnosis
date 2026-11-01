@@ -132,6 +132,12 @@ def test_swedish_answer_that_refuses_and_then_answers_is_reported() -> None:
     ]
 
 
+def test_partly_answered_case_may_refuse_and_give_context() -> None:
+    case = Case(id="crew", question="Largest crew?", language="en", mentions=("300",), partial=True)
+    text = "I cannot answer which pirate had the largest crew. Blackbeard had 300 men [1]."
+    assert check(case, answer(text)).passed
+
+
 def test_partial_answer_that_names_a_missing_detail_passes() -> None:
     text = "Han dödades vid Ocracoke 1718 [1]. Vem som sköt honom nämns inte i källorna."
     assert check(BLACKBEARD_SV, answer(text)).passed
@@ -186,11 +192,13 @@ def test_loads_cases_with_defaults(tmp_path: Path) -> None:
     path = write(
         tmp_path,
         '[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\nmentions = ["x"]\n\n'
-        '[[case]]\nid = "b"\nquestion = "R?"\nlanguage = "sv"\ndeclines = true\n',
+        '[[case]]\nid = "b"\nquestion = "R?"\nlanguage = "sv"\ndeclines = true\n\n'
+        '[[case]]\nid = "c"\nquestion = "S?"\nlanguage = "en"\nmentions = ["y"]\npartial = true\n',
     )
     assert load_cases(path) == [
         Case(id="a", question="Q?", language="en", mentions=("x",)),
         Case(id="b", question="R?", language="sv", declines=True),
+        Case(id="c", question="S?", language="en", mentions=("y",), partial=True),
     ]
 
 
@@ -205,6 +213,16 @@ def test_loads_cases_with_defaults(tmp_path: Path) -> None:
         ('[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\nmentions = "x"\n', "list of"),
         ('[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\nsources = [""]\n', "list of"),
         ('[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\ndeclines = "yes"\n', "true or"),
+        (
+            '[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\nmentions = ["x"]\n'
+            'partial = "yes"\n',
+            "'partial' must be true or false",
+        ),
+        (
+            '[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\ndeclines = true\n'
+            "partial = true\n",
+            "cannot both decline and be partly answered",
+        ),
         ('[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\n', "expects nothing"),
         (
             '[[case]]\nid = "a"\nquestion = "Q?"\nlanguage = "en"\ndeclines = true\n'
@@ -231,6 +249,8 @@ def test_loads_cases_with_defaults(tmp_path: Path) -> None:
         "mentions-not-list",
         "empty-source",
         "declines-not-bool",
+        "partial-not-bool",
+        "declines-and-partial",
         "expects-nothing",
         "declines-and-expects",
         "unknown-field",

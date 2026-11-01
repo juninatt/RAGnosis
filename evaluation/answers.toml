@@ -5,6 +5,8 @@
 #   mentions - the answer contains at least one of these words (any case)
 #   language - the answer is written in this language ("sv" or "en")
 #   declines - the sources do not cover the question, so the answer must say so
+#   partial  - the sources answer only part of it, so the answer may say it
+#              cannot answer and give context with sources
 # Findings from testing belong here as new cases.
 
 # The share of cases a release must pass with the default settings (decision

@@ -93,8 +93,9 @@ _DECLINE_PHRASES = (
     "nämns inte",
 )
 # Phrases that refuse the whole question. "Not mentioned" may describe one
-# missing detail of a partial answer; "cannot answer" followed by an answer
-# with sources contradicts itself.
+# missing detail of an answer; "cannot answer" followed by an answer with
+# sources contradicts itself, unless the sources only partly answer the
+# question and the rest is context.
 _REFUSAL_PHRASES = ("cannot answer", "can't answer", "kan inte svara")
 
 
@@ -112,6 +113,9 @@ class Case:
     sources: tuple[str, ...] = ()
     mentions: tuple[str, ...] = ()
     declines: bool = False
+    # The sources answer only part of the question, so the answer may say it
+    # cannot answer and still give context with sources.
+    partial: bool = False
 
 
 @dataclass(frozen=True)
@@ -165,7 +169,8 @@ def check(case: Case, answer: Answer) -> Verdict:
             problems.append(f"cites {found}, expected one of {list(case.sources)}")
         if case.mentions and not any(m.lower() in text for m in case.mentions):
             problems.append(f"mentions none of {list(case.mentions)}")
-        if cited_titles and any(phrase in text for phrase in _REFUSAL_PHRASES):
+        refuses = any(phrase in text for phrase in _REFUSAL_PHRASES)
+        if refuses and cited_titles and not case.partial:
             problems.append("says it cannot answer, then answers with sources")
 
     language = answer_language(answer.text)
@@ -222,7 +227,7 @@ def load_cases(path: Path) -> list[Case]:
     return load_scorecard(path).cases
 
 
-_FIELDS = {"id", "question", "language", "sources", "mentions", "declines"}
+_FIELDS = {"id", "question", "language", "sources", "mentions", "declines", "partial"}
 
 
 def _parse_case(table: dict[str, Any], number: int) -> Case:
@@ -240,8 +245,12 @@ def _parse_case(table: dict[str, Any], number: int) -> Case:
         if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
             raise CaseError(f"{where}: {name!r} must be a list of non-empty strings")
     declines = table.get("declines", False)
-    if not isinstance(declines, bool):
-        raise CaseError(f"{where}: 'declines' must be true or false")
+    partial = table.get("partial", False)
+    for name, value in (("declines", declines), ("partial", partial)):
+        if not isinstance(value, bool):
+            raise CaseError(f"{where}: {name!r} must be true or false")
+    if declines and partial:
+        raise CaseError(f"{where} cannot both decline and be partly answered")
     if not declines and not (table.get("sources") or table.get("mentions")):
         raise CaseError(f"{where} expects nothing; give sources, mentions or declines")
     if declines and (table.get("sources") or table.get("mentions")):
@@ -253,4 +262,5 @@ def _parse_case(table: dict[str, Any], number: int) -> Case:
         sources=tuple(table.get("sources", [])),
         mentions=tuple(table.get("mentions", [])),
         declines=declines,
+        partial=partial,
     )

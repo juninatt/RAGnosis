@@ -190,7 +190,8 @@ Answers the known questions in [`evaluation/answers.toml`](evaluation/answers.to
 with the real models and checks each answer: does it cite the right article,
 mention the expected facts, use the question's language, or decline when the
 sources do not cover the question? An answer that says it cannot answer and
-then answers with sources fails. Prints PASS or FAIL per question with the
+then answers with sources fails, unless the sources only partly answer the
+question and the rest is context. Prints PASS or FAIL per question with the
 reasons and the search score of the best passage, and a summary. `--case ID` runs only some questions, and `--detailed`
 scores detailed answers. A full run passes (exit code 0) when it reaches the
 `pass_rate` in the cases file, 85 % of the questions; a run of chosen cases
