@@ -192,6 +192,31 @@ def rewrite_query(question: str, llm: ChatModel) -> str:
     return query[:MAX_QUERY_CHARS] or question
 
 
+def search(
+    question: str,
+    search_query: str | None,
+    *,
+    store: VectorStore,
+    embedder: Embedder,
+    k: int = DEFAULT_K,
+) -> list[SearchResult]:
+    """The ``k`` best passages for the question and for the rewritten query together.
+
+    The rewritten query finds passages by their English words; the question
+    itself finds them by the other names stored with them, such as
+    "Svartskägg", which the rewrite may translate wrongly (0011). A passage
+    found by both keeps its better score.
+    """
+    queries = [question] if search_query is None else [question, search_query]
+    best: dict[str, SearchResult] = {}
+    for query in queries:
+        for result in store.search(embedder.embed_query(query), k):
+            known = best.get(result.chunk.chunk_id)
+            if known is None or result.score > known.score:
+                best[result.chunk.chunk_id] = result
+    return sorted(best.values(), key=lambda result: -result.score)[:k]
+
+
 def ask(
     question: str,
     *,
@@ -206,8 +231,8 @@ def ask(
 ) -> Answer:
     """Retrieve the ``k`` best passages and have ``llm`` answer from them.
 
-    With ``rewrite``, the passages are found with an English search query the
-    model writes first; the answer is still written for the original question.
+    With ``rewrite``, the passages are also searched for with an English query
+    the model writes first; the answer is still written for the original question.
     When no passage scores at least ``min_score``, the question is declined
     without the model; the passages are kept, so their scores can be shown.
     ``length`` asks for a short answer or a detailed one of a paragraph or two.
@@ -225,7 +250,7 @@ def ask(
     search_query = rewrite_query(question, llm) if should_rewrite(question, rewrite) else None
     if search_query is not None:
         logger.info("Searching for %r", search_query)
-    passages = store.search(embedder.embed_query(search_query or question), k)
+    passages = search(question, search_query, store=store, embedder=embedder, k=k)
     logger.info(
         "Answering from: %s", ", ".join(r.chunk.article_title for r in passages) or "nothing"
     )

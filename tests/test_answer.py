@@ -30,6 +30,7 @@ from ragnosis.answer import (
     cited_numbers,
     is_swedish,
     rewrite_query,
+    search,
     should_rewrite,
     system_prompt,
 )
@@ -458,6 +459,50 @@ def test_ask_searches_with_the_rewritten_query_but_answers_the_question(
     answer_prompt = llm.prompts[1]
     assert answer_prompt[1].content.endswith("Question: Hur dog Svartskägg?")
     assert answer_prompt[0].content.endswith(SWEDISH_RULE)
+
+
+# --- Searching with the question and the rewritten query ---
+
+
+def test_search_without_a_rewrite_uses_the_question(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    results = search("Hannibal Alps elephants", None, store=store, embedder=embedder, k=1)
+    assert results[0].chunk.article_title == "Hannibal"
+
+
+def test_search_keeps_passages_found_only_by_the_question(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    # The rewrite went wrong, as "Svartskägg" did to "Black Death"; the
+    # question's own words still find the passage.
+    results = search("Anne Bonny Irish", "Black Death plague", store=store, embedder=embedder, k=3)
+    assert "Anne Bonny" in [result.chunk.article_title for result in results]
+
+
+def test_search_keeps_passages_found_only_by_the_rewritten_query(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    results = search(
+        "Hur dog Svartskägg?", "Teach killed Ocracoke", store=store, embedder=embedder, k=1
+    )
+    assert results[0].chunk.article_title == "Blackbeard"
+
+
+def test_search_lists_each_passage_once_with_its_best_score(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    results = search("Teach killed Ocracoke", "Teach killed", store=store, embedder=embedder, k=3)
+    ids = [result.chunk.chunk_id for result in results]
+    assert len(ids) == len(set(ids))
+    best = store.search(embedder.embed_query("Teach killed Ocracoke"), 1)[0]
+    assert results[0] == best
+
+
+def test_search_returns_at_most_k_best_first(store: VectorStore, embedder: FakeEmbedder) -> None:
+    results = search("Hannibal", "Anne Bonny", store=store, embedder=embedder, k=2)
+    assert len(results) == 2
+    assert results[0].score >= results[1].score
 
 
 def test_answers_are_written_with_temperature_zero(
