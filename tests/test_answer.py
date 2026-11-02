@@ -35,6 +35,7 @@ from ragnosis.answer import (
     system_prompt,
     with_titles,
 )
+from ragnosis.embeddings import Vectors
 from ragnosis.evaluation import Case, Language, check
 from ragnosis.llm import LLMError, Message
 from ragnosis.settings import RewriteMode
@@ -555,10 +556,50 @@ def test_search_lists_each_passage_once_with_its_best_score(
     assert results[0] == best
 
 
-def test_search_returns_at_most_k_best_first(store: VectorStore, embedder: FakeEmbedder) -> None:
+def test_search_returns_at_most_k(store: VectorStore, embedder: FakeEmbedder) -> None:
     results = search("Hannibal", "Anne Bonny", store=store, embedder=embedder, k=2)
     assert len(results) == 2
-    assert results[0].score >= results[1].score
+
+
+class FixedEmbedder(FakeEmbedder):
+    """Gives each query a chosen vector, so the scores are known in advance."""
+
+    def __init__(self, queries: dict[str, Vectors]) -> None:
+        super().__init__(dimension=5)
+        self.queries = queries
+
+    def embed_query(self, text: str) -> Vectors:
+        return self.queries[text]
+
+
+def unit(*values: float) -> Vectors:
+    vector = np.array(values, dtype=np.float32)
+    return vector / np.linalg.norm(vector)
+
+
+def test_search_merges_by_place_so_a_wrong_rewrite_cannot_push_the_question_out() -> None:
+    # The question finds two Blackbeard passages, scoring 0.41 and 0.37; the
+    # wrong rewrite scores 0.71 on two others. Merged by score, both would go.
+    embedder = FixedEmbedder(
+        {"Svartskägg": unit(1, 0, 0, 0.9, 2), "Black Death": unit(0, 1, 1, 0, 0)}
+    )
+    store = VectorStore(embedder.model_name, 5)
+    titles = ["Blackbeard", "Black Death", "Alexander", "Blackbeard"]
+    for page_id, title in enumerate(titles, start=1):
+        chunk = make_chunk(chunk_id=f"{page_id}-0", page_id=page_id, article_title=title)
+        store.replace_article(page_id, 1, [chunk], np.eye(5, dtype=np.float32)[[page_id - 1]])
+
+    results = search("Svartskägg", "Black Death", store=store, embedder=embedder, k=2)
+
+    assert [r.chunk.article_title for r in results] == ["Blackbeard", "Black Death"]
+    assert results[0].score == pytest.approx(0.41, abs=0.01)
+
+
+def test_search_puts_passages_found_by_both_first(
+    store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    results = search("Anne Bonny Irish", "Irish pirate", store=store, embedder=embedder, k=3)
+    assert results[0].chunk.article_title == "Anne Bonny"
 
 
 def test_answers_are_written_with_temperature_zero(

@@ -79,6 +79,9 @@ REWRITE_EXAMPLES = (
     ("Varför gick Titanic under?", "Titanic sinking cause iceberg 1912"),
 )
 MAX_QUERY_CHARS = 200
+# Reciprocal rank fusion's usual constant: the first places differ little, so
+# one list cannot outweigh the other with its first passage alone.
+RANK_OFFSET = 60
 _QUERY_LABEL = re.compile(r"^(english )?(search )?query\s*:\s*", re.IGNORECASE)
 
 # "[1]", "[2][3]" and "[1, 2]" all occur in model output.
@@ -229,17 +232,27 @@ def search(
 
     The rewritten query finds passages by their English words; the question
     itself finds them by the other names stored with them, such as
-    "Svartskägg", which the rewrite may translate wrongly (0011). A passage
-    found by both keeps its better score.
+    "Svartskägg", which the rewrite may translate wrongly (0011).
+
+    The two lists are merged by place, not by score: a wrong rewrite such as
+    "Black Death" can score higher on its own passages than the question does
+    on the right one, and would push it out. Each passage counts
+    1 / (RANK_OFFSET + place) per list it is in; equal sums keep the
+    question's passages first. A passage keeps its better score, which the
+    minimum score and the page compare.
     """
     queries = [question] if search_query is None else [question, search_query]
     best: dict[str, SearchResult] = {}
+    fused: dict[str, float] = {}
     for query in queries:
-        for result in store.search(embedder.embed_query(query), k):
-            known = best.get(result.chunk.chunk_id)
+        for place, result in enumerate(store.search(embedder.embed_query(query), k), start=1):
+            chunk_id = result.chunk.chunk_id
+            fused[chunk_id] = fused.get(chunk_id, 0.0) + 1 / (RANK_OFFSET + place)
+            known = best.get(chunk_id)
             if known is None or result.score > known.score:
-                best[result.chunk.chunk_id] = result
-    return sorted(best.values(), key=lambda result: -result.score)[:k]
+                best[chunk_id] = result
+    order = sorted(best, key=lambda chunk_id: -fused[chunk_id])
+    return [best[chunk_id] for chunk_id in order[:k]]
 
 
 def ask(
