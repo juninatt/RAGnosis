@@ -476,6 +476,7 @@ NAMES = {
     "Edward Teach": ["Blackbeard"],
     "Black Bart": ["Bartholomew Roberts"],
     "Black": ["Black Sea"],
+    "corsair": ["Privateer"],
 }
 
 
@@ -490,6 +491,8 @@ NAMES = {
         ("Where is the Black coast?", "Where is the Black (Black Sea) coast?"),
         ("Was Blackbeard called Edward Teach?", "Was Blackbeard called Edward Teach?"),
         ("Who were the Svartskäggarna?", "Who were the Svartskäggarna?"),
+        ("Was he a corsair?", "Was he a corsair (Privateer)?"),
+        ("Where did the Barbary corsairs sail?", "Where did the Barbary corsairs sail?"),
         ("Who was Hannibal?", "Who was Hannibal?"),
     ],
 )

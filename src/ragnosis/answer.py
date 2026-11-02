@@ -206,12 +206,15 @@ def with_titles(question: str, titles_by_name: Mapping[str, Sequence[str]]) -> s
     "Hur dog Svartskägg?" becomes "Hur dog Svartskägg (Blackbeard)?", so the
     rewrite does not have to know the name, and a wrong translation such as
     "Black Death" cannot hide the article (0011). Names match as whole words
-    in any case, also with a genitive s ("Svartskäggs"), longest name first.
+    in any case, longest name first. A name Wikidata writes with a capital
+    letter also matches with a genitive s ("Svartskäggs"); other names do
+    not, as an s there is a plural: "corsairs" is not the privateer "corsair".
     A title the question already contains is not added again.
     """
     if not titles_by_name:
         return question
     by_lower = {name.lower(): titles for name, titles in titles_by_name.items()}
+    proper = {name.lower() for name in titles_by_name if name[:1].isupper()}
     names = sorted(by_lower, key=len, reverse=True)
     pattern = re.compile(
         r"(?<!\w)(" + "|".join(map(re.escape, names)) + r")s?(?!\w)", re.IGNORECASE
@@ -219,7 +222,10 @@ def with_titles(question: str, titles_by_name: Mapping[str, Sequence[str]]) -> s
     lowered = question.lower()
 
     def add_titles(match: re.Match[str]) -> str:
-        titles = [t for t in by_lower[match.group(1).lower()] if t.lower() not in lowered]
+        name = match.group(1).lower()
+        if match.group(0) != match.group(1) and name not in proper:
+            return match.group(0)
+        titles = [t for t in by_lower[name] if t.lower() not in lowered]
         return f"{match.group(0)} ({', '.join(titles)})" if titles else match.group(0)
 
     return pattern.sub(add_titles, question)
