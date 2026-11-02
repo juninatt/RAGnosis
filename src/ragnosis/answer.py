@@ -159,9 +159,14 @@ def cited_numbers(text: str, count: int) -> list[int]:
 def build_messages(
     question: str, passages: Sequence[SearchResult], length: AnswerLength = "short"
 ) -> list[Message]:
-    """The prompt: instructions, then the numbered passages and the question."""
+    """The prompt: instructions, then the numbered passages and the question.
+
+    Each passage is headed as it was embedded, with the article's other names,
+    so the model knows that a passage about Blackbeard answers a question
+    about Svartskägg (0011).
+    """
     sources = "\n\n".join(
-        f"[{number}] {result.chunk.article_title} > {result.chunk.section}\n{result.chunk.text}"
+        f"[{number}] {result.chunk.embedding_text}"
         for number, result in enumerate(passages, start=1)
     )
     return [

@@ -119,6 +119,12 @@ def test_prompt_has_instructions_then_numbered_sources_and_question() -> None:
     )
 
 
+def test_prompt_shows_the_other_names_with_each_source() -> None:
+    chunk = make_chunk(section="Death", text="Killed in 1718.", names=("Svartskägg", "Teach"))
+    messages = build_messages("Hur dog Svartskägg?", [SearchResult(chunk, 0.9)])
+    assert "[1] Blackbeard (Svartskägg, Teach) > Death\nKilled in 1718." in messages[1].content
+
+
 @pytest.mark.parametrize("rule", ["only the numbered sources", "[1]", "cannot answer"])
 def test_system_prompt_states_the_grounding_rules(rule: str) -> None:
     assert rule in SYSTEM_PROMPT
