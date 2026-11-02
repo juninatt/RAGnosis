@@ -197,6 +197,21 @@ def test_names_of_an_article_not_indexed_are_empty(store: VectorStore) -> None:
     assert store.names_of(99) == ()
 
 
+def test_titles_by_name_lists_each_article_once() -> None:
+    store = VectorStore("fake-model", 2)
+    blackbeard = [
+        make_chunk(chunk_id=f"1-{i}", position=i, names=("Svartskägg", "Teach")) for i in range(2)
+    ]
+    teach = make_chunk(chunk_id="2-0", page_id=2, article_title="Teach family", names=("Teach",))
+    store.replace_article(1, 1, blackbeard, np.array([unit(1, 0), unit(0, 1)]))
+    store.replace_article(2, 1, [teach], np.array([unit(1, 0)]))
+
+    assert store.titles_by_name() == {
+        "Svartskägg": ["Blackbeard"],
+        "Teach": ["Blackbeard", "Teach family"],
+    }
+
+
 def test_index_from_an_older_version_asks_for_a_rebuild(store: VectorStore, tmp_path: Path) -> None:
     store.save(tmp_path)
     edit_manifest(format_version=1)(tmp_path)

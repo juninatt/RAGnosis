@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -192,6 +192,31 @@ def rewrite_query(question: str, llm: ChatModel) -> str:
     return query[:MAX_QUERY_CHARS] or question
 
 
+def with_titles(question: str, titles_by_name: Mapping[str, Sequence[str]]) -> str:
+    """``question`` with the article title after each other name it uses.
+
+    "Hur dog Svartskägg?" becomes "Hur dog Svartskägg (Blackbeard)?", so the
+    rewrite does not have to know the name, and a wrong translation such as
+    "Black Death" cannot hide the article (0011). Names match as whole words
+    in any case, also with a genitive s ("Svartskäggs"), longest name first.
+    A title the question already contains is not added again.
+    """
+    if not titles_by_name:
+        return question
+    by_lower = {name.lower(): titles for name, titles in titles_by_name.items()}
+    names = sorted(by_lower, key=len, reverse=True)
+    pattern = re.compile(
+        r"(?<!\w)(" + "|".join(map(re.escape, names)) + r")s?(?!\w)", re.IGNORECASE
+    )
+    lowered = question.lower()
+
+    def add_titles(match: re.Match[str]) -> str:
+        titles = [t for t in by_lower[match.group(1).lower()] if t.lower() not in lowered]
+        return f"{match.group(0)} ({', '.join(titles)})" if titles else match.group(0)
+
+    return pattern.sub(add_titles, question)
+
+
 def search(
     question: str,
     search_query: str | None,
@@ -231,6 +256,7 @@ def ask(
 ) -> Answer:
     """Retrieve the ``k`` best passages and have ``llm`` answer from them.
 
+    Other names from the index are first followed by their article titles.
     With ``rewrite``, the passages are also searched for with an English query
     the model writes first; the answer is still written for the original question.
     When no passage scores at least ``min_score``, the question is declined
@@ -247,10 +273,13 @@ def ask(
     if not question:
         raise ValueError("The question must not be blank")
 
-    search_query = rewrite_query(question, llm) if should_rewrite(question, rewrite) else None
+    named = with_titles(question, store.titles_by_name())
+    if named != question:
+        logger.info("Known names: %r", named)
+    search_query = rewrite_query(named, llm) if should_rewrite(question, rewrite) else None
     if search_query is not None:
         logger.info("Searching for %r", search_query)
-    passages = search(question, search_query, store=store, embedder=embedder, k=k)
+    passages = search(named, search_query, store=store, embedder=embedder, k=k)
     logger.info(
         "Answering from: %s", ", ".join(r.chunk.article_title for r in passages) or "nothing"
     )

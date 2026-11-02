@@ -74,6 +74,16 @@ class VectorStore:
         """The other names the article's chunks were embedded with."""
         return next((chunk.names for chunk in self._chunks if chunk.page_id == page_id), ())
 
+    def titles_by_name(self) -> dict[str, list[str]]:
+        """Each other name in the index, with the titles of the articles that have it."""
+        titles: dict[str, list[str]] = {}
+        for chunk in self._chunks:
+            for name in chunk.names:
+                known = titles.setdefault(name, [])
+                if chunk.article_title not in known:
+                    known.append(chunk.article_title)
+        return titles
+
     def replace_article(
         self, page_id: int, revision_id: int, chunks: list[Chunk], vectors: Vectors
     ) -> None:

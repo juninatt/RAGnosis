@@ -33,6 +33,7 @@ from ragnosis.answer import (
     search,
     should_rewrite,
     system_prompt,
+    with_titles,
 )
 from ragnosis.evaluation import Case, Language, check
 from ragnosis.llm import LLMError, Message
@@ -459,6 +460,61 @@ def test_ask_searches_with_the_rewritten_query_but_answers_the_question(
     answer_prompt = llm.prompts[1]
     assert answer_prompt[1].content.endswith("Question: Hur dog Svartskägg?")
     assert answer_prompt[0].content.endswith(SWEDISH_RULE)
+
+
+# --- Other names followed by their article titles ---
+
+NAMES = {
+    "Svartskägg": ["Blackbeard"],
+    "Edward Teach": ["Blackbeard"],
+    "Black Bart": ["Bartholomew Roberts"],
+    "Black": ["Black Sea"],
+}
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("Hur dog Svartskägg?", "Hur dog Svartskägg (Blackbeard)?"),
+        ("Hur dog svartskägg?", "Hur dog svartskägg (Blackbeard)?"),
+        ("Var låg Svartskäggs skepp?", "Var låg Svartskäggs (Blackbeard) skepp?"),
+        ("Was Edward Teach English?", "Was Edward Teach (Blackbeard) English?"),
+        ("Who was Black Bart?", "Who was Black Bart (Bartholomew Roberts)?"),
+        ("Where is the Black coast?", "Where is the Black (Black Sea) coast?"),
+        ("Was Blackbeard called Edward Teach?", "Was Blackbeard called Edward Teach?"),
+        ("Who were the Svartskäggarna?", "Who were the Svartskäggarna?"),
+        ("Who was Hannibal?", "Who was Hannibal?"),
+    ],
+)
+def test_with_titles(question: str, expected: str) -> None:
+    assert with_titles(question, NAMES) == expected
+
+
+def test_with_titles_lists_every_article_with_the_name() -> None:
+    names = {"Barbarossa": ["Hayreddin Barbarossa", "Oruç Reis"]}
+    assert with_titles("Vem var Barbarossa?", names) == (
+        "Vem var Barbarossa (Hayreddin Barbarossa, Oruç Reis)?"
+    )
+
+
+def test_with_titles_without_names_keeps_the_question() -> None:
+    assert with_titles("Vem var Svartskägg?", {}) == "Vem var Svartskägg?"
+
+
+def test_ask_searches_and_rewrites_with_the_titles_but_answers_the_question(
+    embedder: FakeEmbedder,
+) -> None:
+    store = VectorStore(embedder.model_name, embedder.dimension)
+    chunk = make_chunk(text="Killed at Ocracoke.", names=("Svartskägg",))
+    store.replace_article(1, 1, [chunk], np.array([embedder.vector("Blackbeard Ocracoke")]))
+    llm = ScriptedChatModel("Blackbeard death", "Han dödades vid Ocracoke [1].")
+
+    answer = ask("Hur dog Svartskägg?", store=store, embedder=embedder, llm=llm, rewrite="swedish")
+
+    assert llm.prompts[0][-1].content == "Hur dog Svartskägg (Blackbeard)?"
+    assert answer.passages[0].score > 0
+    assert answer.question == "Hur dog Svartskägg?"
+    assert llm.prompts[1][1].content.endswith("Question: Hur dog Svartskägg?")
 
 
 # --- Searching with the question and the rewritten query ---
