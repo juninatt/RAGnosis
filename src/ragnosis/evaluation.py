@@ -41,6 +41,8 @@ _MARKERS: dict[str, frozenset[str]] = {
             "vilka",
             "enligt",
             "även",
+            "finns",
+            "ett",
             # Norwegian and Danish write these å/at, for, over, hadde/havde,
             # siden, mellom/mellem, gjennom/gennem and uten/uden.
             "att",

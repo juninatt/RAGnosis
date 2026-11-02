@@ -60,6 +60,16 @@ def answer(text: str, passages: list[SearchResult] | None = None) -> Answer:
             "Britanniens nordamerikanska kolonier [2]. Han fick sitt namn av sitt skägg.",
             "sv",
         ),
+        # A real answer the 1.2.0 scorecard misread: English names count "of" and "the".
+        (
+            "Pirarfartyg flög under 1700-talet ofta en svart flagga med ett motiv av en "
+            'människohuvud eller "Death\'s Head" [1]. Den mest kända varianten, skallen med '
+            "korsade ben på svart fält, användes särskilt under 1720-talen [1]. Det finns "
+            'också historiska varianter som den så kallade "Old Roger"-flaggan [4]. I '
+            "populärkultur förekommer olika utformningar, exempelvis skallen med två svärd "
+            "i Disney-filmen Pirates of the Caribbean [2].",
+            "sv",
+        ),
         ("He was killed at Ocracoke and his head was taken to Virginia [1].", "en"),
         # Swedish letters in names do not make English text Swedish.
         ("Störtebeker was a pirate of the Baltic, and his crew were the Vitalienbrüder.", "en"),
