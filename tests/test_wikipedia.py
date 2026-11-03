@@ -188,6 +188,42 @@ def test_responses_that_are_not_json_objects_raise_wikipedia_errors() -> None:
         client.fetch_article("Blackbeard")
 
 
+# --- HTML of a revision ---
+
+
+def test_fetches_the_html_of_a_revision() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"parse": {"revid": 100, "text": "<p>Teach</p>"}})
+
+    with make_client(handler) as client:
+        assert client.fetch_html(100) == "<p>Teach</p>"
+
+    params = requests[0].url.params
+    assert params["action"] == "parse"
+    assert params["oldid"] == "100"
+    assert params["prop"] == "text"
+    assert params["formatversion"] == "2"
+
+
+def test_html_of_a_missing_revision_raises() -> None:
+    payload = {"error": {"code": "nosuchrevid", "info": "There is no revision with ID 7."}}
+    client = make_client(returning(payload))
+    with client, pytest.raises(WikipediaError, match="API error for revision 7"):
+        client.fetch_html(7)
+
+
+@pytest.mark.parametrize(
+    "payload", [{}, {"parse": []}, {"parse": {"text": None}}], ids=["empty", "list", "no-text"]
+)
+def test_unexpected_html_response_raises(payload: dict[str, Any]) -> None:
+    client = make_client(returning(payload))
+    with client, pytest.raises(WikipediaError, match="Unexpected API response for revision 1"):
+        client.fetch_html(1)
+
+
 # --- Construction ---
 
 

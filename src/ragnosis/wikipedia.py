@@ -2,7 +2,9 @@
 
 Uses the TextExtracts API, which returns article text without markup, so no
 wikitext or HTML parsing is needed. Section headings remain as ``== Heading ==``
-lines, which later steps can use to split articles sensibly.
+lines, which later steps can use to split articles sensibly. The HTML of the
+same revision is fetched separately, for the tables and captions the text
+leaves out.
 
 Requests go through ApiClient, which is polite to Wikimedia's servers.
 """
@@ -143,6 +145,38 @@ class WikipediaClient:
             )
         except (KeyError, IndexError, TypeError, AttributeError) as exc:
             raise WikipediaError(f"Unexpected API response for {title!r}") from exc
+
+    def fetch_html(self, revision_id: int) -> str:
+        """The rendered HTML of one revision of an article.
+
+        The text extract leaves out tables, infoboxes and image captions; the
+        HTML has them (decision 0012). Asking by revision keeps them in line
+        with the text that was stored.
+
+        Raises:
+            WikipediaError: the revision does not exist, or the API failed or
+                returned something unusable.
+        """
+        data = self._get(
+            {
+                "action": "parse",
+                "format": "json",
+                "formatversion": "2",
+                "oldid": str(revision_id),
+                "prop": "text",
+                "disableeditsection": "1",
+                "disablelimitreport": "1",
+            }
+        )
+        if "error" in data:
+            raise WikipediaError(f"API error for revision {revision_id}: {data['error']}")
+        try:
+            html = data["parse"]["text"]
+        except (KeyError, TypeError) as exc:
+            raise WikipediaError(f"Unexpected API response for revision {revision_id}") from exc
+        if not isinstance(html, str):
+            raise WikipediaError(f"Unexpected API response for revision {revision_id}")
+        return html
 
     def _get(self, params: dict[str, str]) -> dict[str, Any]:
         try:
