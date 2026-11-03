@@ -10,6 +10,7 @@ from factories import make_article
 
 from ragnosis.article_store import ArticleStore
 from ragnosis.ingest import IngestReport, ingest
+from ragnosis.parts import Part
 from ragnosis.wikidata import WikidataError
 from ragnosis.wikipedia import Article, ArticleNotFoundError, WikipediaError
 
@@ -195,6 +196,62 @@ def test_names_are_not_fetched_for_failed_or_duplicate_titles(store: ArticleStor
     ingest(["Blackbeard", "Edward Teach", "Bad"], source, store, names=names)
 
     assert names.requested == [["Blackbeard"]]
+
+
+class FakeHtml:
+    """Returns prepared HTML by revision, or raises a prepared error, and records every request."""
+
+    def __init__(self, pages: dict[int, str | WikipediaError]) -> None:
+        self.pages = pages
+        self.requested: list[int] = []
+
+    def fetch_html(self, revision_id: int) -> str:
+        self.requested.append(revision_id)
+        page = self.pages[revision_id]
+        if isinstance(page, WikipediaError):
+            raise page
+        return page
+
+
+INFOBOX = '<table class="infobox"><tr><th>Born</th><td>c. 1680</td></tr></table>'
+
+
+def test_stores_the_tables_and_captions_of_the_fetched_revision(store: ArticleStore) -> None:
+    source = FakeSource({"Blackbeard": make_article(revision_id=100)})
+    html = FakeHtml({100: INFOBOX})
+
+    report = ingest(["Blackbeard"], source, store, html=html)
+
+    assert html.requested == [100]
+    assert store.load("Blackbeard").parts == (Part("Facts", "Born: c. 1680"),)
+    assert report.with_parts == ["Blackbeard"]
+    assert report.ok
+
+
+def test_gives_stored_articles_their_tables_once(store: ArticleStore) -> None:
+    store.save("Blackbeard", make_article(revision_id=100))  # stored before 1.3.0
+    store.save("Hannibal", make_article(title="Hannibal", page_id=2, parts=()))
+    html = FakeHtml({100: "<p>No tables.</p>"})
+
+    report = ingest(["Blackbeard", "Hannibal"], FakeSource({}), store, html=html)
+
+    assert html.requested == [100]
+    assert report.with_parts == ["Blackbeard"]
+    assert store.load("Blackbeard").parts == ()
+
+
+def test_keeps_articles_without_tables_when_the_html_fails(
+    store: ArticleStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    source = FakeSource({"Blackbeard": make_article(revision_id=100)})
+    html = FakeHtml({100: WikipediaError("Giving up after 4 attempts")})
+
+    report = ingest(["Blackbeard"], source, store, html=html)
+
+    assert store.load("Blackbeard").parts is None
+    assert report.parts_failed == {"Blackbeard": "Giving up after 4 attempts"}
+    assert not report.ok
+    assert "the next run retries" in caplog.text
 
 
 def test_empty_title_list_does_nothing(store: ArticleStore) -> None:

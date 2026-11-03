@@ -20,9 +20,10 @@ from ragnosis.answer import LENGTH_RULES, NOT_COVERED_TEXT, Answer, AnswerLength
 from ragnosis.article_store import ArticleStore
 from ragnosis.evaluation import Case, Verdict
 from ragnosis.llm import LLMError, LLMUnavailableError, Message, ModelNotFoundError
+from ragnosis.parts import Part
 from ragnosis.vector_store import MANIFEST_FILE, SearchResult, VectorStore
 from ragnosis.wikidata import WikidataError
-from ragnosis.wikipedia import Article, ArticleNotFoundError
+from ragnosis.wikipedia import Article, ArticleNotFoundError, WikipediaError
 
 
 class FakeWikipediaClient:
@@ -30,6 +31,7 @@ class FakeWikipediaClient:
 
     articles: dict[str, Article] = {}
     languages: list[str] = []
+    html_error: Exception | None = None
 
     def __init__(self, language: str = "en") -> None:
         self.languages.append(language)
@@ -49,6 +51,11 @@ class FakeWikipediaClient:
         if title not in self.articles:
             raise ArticleNotFoundError(f"No Wikipedia article titled {title!r}")
         return self.articles[title]
+
+    def fetch_html(self, revision_id: int) -> str:
+        if self.html_error is not None:
+            raise self.html_error
+        return '<table class="infobox"><tr><th>Born</th><td>c. 1680</td></tr></table>'
 
 
 class FakeWikidataClient:
@@ -102,6 +109,7 @@ def project_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         },
     )
     monkeypatch.setattr(FakeWikipediaClient, "languages", [])
+    monkeypatch.setattr(FakeWikipediaClient, "html_error", None)
     return tmp_path
 
 
@@ -159,7 +167,10 @@ def test_ingest_exits_with_failure_code_when_a_title_fails(
 
     assert cli.main(["ingest", "--topics", str(topics)]) == cli.EXIT_FAILURES
     assert "Failed: 'No such pirate'" in caplog.text
-    assert "1 fetched, 0 already stored, 0 duplicates, 1 failed, 1 given other names" in caplog.text
+    assert (
+        "1 fetched, 0 already stored, 0 duplicates, 1 failed, 1 given other names, "
+        "1 given tables and captions" in caplog.text
+    )
 
 
 def test_ingest_exits_with_failure_code_when_wikidata_fails(
@@ -172,6 +183,24 @@ def test_ingest_exits_with_failure_code_when_wikidata_fails(
 
     assert "Other names from Wikidata failed: Giving up after 4 attempts" in caplog.text
     assert ArticleStore(project_dir / "data" / "articles").load("Blackbeard").names is None
+
+
+def test_ingest_stores_the_tables_and_captions(project_dir: Path) -> None:
+    topics = write(project_dir / "topics.txt", "Blackbeard\n")
+    cli.main(["ingest", "--topics", str(topics)])
+    article = ArticleStore(project_dir / "data" / "articles").load("Blackbeard")
+    assert article.parts == (Part("Facts", "Born: c. 1680"),)
+
+
+def test_ingest_exits_with_failure_code_when_the_html_fails(
+    project_dir: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(FakeWikipediaClient, "html_error", WikipediaError("Giving up"))
+    topics = write(project_dir / "topics.txt", "Blackbeard\n")
+
+    assert cli.main(["ingest", "--topics", str(topics)]) == cli.EXIT_FAILURES
+
+    assert "Tables and captions failed: 'Blackbeard': Giving up" in caplog.text
 
 
 def test_second_run_skips_stored_articles_and_refresh_refetches(

@@ -172,21 +172,30 @@ def run_ingest(settings: Settings, *, topics: Path | None, refresh: bool) -> int
         WikidataClient(settings.wiki_language, settings.name_languages) as wikidata,
     ):
         report = ingest(
-            titles, client, ArticleStore(settings.articles_dir), names=wikidata, refresh=refresh
+            titles,
+            client,
+            ArticleStore(settings.articles_dir),
+            names=wikidata,
+            html=client,
+            refresh=refresh,
         )
 
     logger.info(
-        "Done: %d fetched, %d already stored, %d duplicates, %d failed, %d given other names",
+        "Done: %d fetched, %d already stored, %d duplicates, %d failed, %d given other names, "
+        "%d given tables and captions",
         len(report.fetched),
         len(report.skipped),
         len(report.duplicates),
         len(report.failed),
         len(report.named),
+        len(report.with_parts),
     )
     for title, reason in report.failed.items():
         logger.error("Failed: %r: %s", title, reason)
     if report.names_failed is not None:
         logger.error("Other names from Wikidata failed: %s", report.names_failed)
+    for title, reason in report.parts_failed.items():
+        logger.error("Tables and captions failed: %r: %s", title, reason)
     return EXIT_OK if report.ok else EXIT_FAILURES
 
 

@@ -11,6 +11,7 @@ from dataclasses import asdict
 from pathlib import Path
 from urllib.parse import quote
 
+from ragnosis.parts import Part
 from ragnosis.wikipedia import Article
 
 
@@ -52,4 +53,6 @@ class ArticleStore:
         data = json.loads(self.path_for(title).read_text(encoding="utf-8"))
         if data.get("names") is not None:
             data["names"] = tuple(data["names"])
+        if data.get("parts") is not None:
+            data["parts"] = tuple(Part(**part) for part in data["parts"])
         return Article(**data)

@@ -2,8 +2,9 @@
 
 One failing title should not stop the run: failures are collected and reported
 at the end, and a rerun only fetches what is still missing. Each article's
-other names come from Wikidata, for stored articles that do not have them yet
-too, so an upgrade does not need the texts fetched again.
+other names come from Wikidata, and its tables and captions from its HTML,
+for stored articles that do not have them yet too, so an upgrade does not need
+the texts fetched again.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from ragnosis.article_store import ArticleStore
+from ragnosis.parts import extract_parts
 from ragnosis.wikidata import WikidataError
 from ragnosis.wikipedia import Article, WikipediaError
 
@@ -24,6 +26,12 @@ class ArticleSource(Protocol):
     """Anything that can fetch an article by title; the real one is WikipediaClient."""
 
     def fetch_article(self, title: str) -> Article: ...
+
+
+class HtmlSource(Protocol):
+    """Anything that can fetch an article's HTML by revision; the real one is WikipediaClient."""
+
+    def fetch_html(self, revision_id: int) -> str: ...
 
 
 class NameSource(Protocol):
@@ -42,10 +50,12 @@ class IngestReport:
     failed: dict[str, str] = field(default_factory=dict)
     named: list[str] = field(default_factory=list)
     names_failed: str | None = None
+    with_parts: list[str] = field(default_factory=list)
+    parts_failed: dict[str, str] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
-        return not self.failed and self.names_failed is None
+        return not self.failed and self.names_failed is None and not self.parts_failed
 
 
 def ingest(
@@ -54,6 +64,7 @@ def ingest(
     store: ArticleStore,
     *,
     names: NameSource | None = None,
+    html: HtmlSource | None = None,
     refresh: bool = False,
 ) -> IngestReport:
     """Fetch and store every title, skipping those already stored unless ``refresh``.
@@ -61,8 +72,9 @@ def ingest(
     Titles that redirect to an article already fetched in this run are recorded
     as duplicates and not saved again, so aliases in the title list do not end
     up as repeated text in the index. With ``names``, every stored article
-    without other names gets them; if that fails the articles are kept without
-    and the next run tries again.
+    without other names gets them, and with ``html`` every one without tables
+    and captions gets those; if either fails the articles are kept without and
+    the next run tries again.
     """
     report = IngestReport()
     seen_page_ids: set[int] = set()
@@ -92,6 +104,8 @@ def ingest(
 
     if names is not None:
         _add_names([*report.fetched, *report.skipped], names, store, report)
+    if html is not None:
+        _add_parts([*report.fetched, *report.skipped], html, store, report)
     return report
 
 
@@ -112,3 +126,21 @@ def _add_names(
     for title, article in unnamed.items():
         store.save(title, replace(article, names=tuple(found.get(article.title, []))))
         report.named.append(title)
+
+
+def _add_parts(
+    titles: list[str], html: HtmlSource, store: ArticleStore, report: IngestReport
+) -> None:
+    """Fetch and store the tables and captions of the stored ``titles`` that have none yet."""
+    for title in titles:
+        article = store.load(title)
+        if article.parts is not None:
+            continue
+        try:
+            parts = extract_parts(html.fetch_html(article.revision_id))
+        except WikipediaError as exc:
+            logger.warning("Could not fetch the tables of %r: %s; the next run retries", title, exc)
+            report.parts_failed[title] = str(exc)
+            continue
+        store.save(title, replace(article, parts=tuple(parts)))
+        report.with_parts.append(title)

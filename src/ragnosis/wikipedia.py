@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from ragnosis.api_client import ApiClient, ApiError
+from ragnosis.parts import Part
 from ragnosis.settings import is_valid_language
 
 
@@ -50,6 +51,9 @@ class Article:
     # Other names from Wikidata, used to find the article's passages. None
     # means not fetched yet (articles stored before 1.2.0, or Wikidata failed).
     names: tuple[str, ...] | None = None
+    # Tables, infoboxes and image captions from the article's HTML (0012).
+    # None means not fetched yet (articles stored before 1.3.0, or it failed).
+    parts: tuple[Part, ...] | None = None
 
 
 def _utc_now() -> datetime:

@@ -9,6 +9,7 @@ import pytest
 from factories import make_article
 
 from ragnosis.article_store import ArticleStore
+from ragnosis.parts import Part
 
 
 @pytest.fixture
@@ -33,9 +34,19 @@ def test_files_from_before_names_existed_still_load(store: ArticleStore) -> None
     path = store.path_for("Blackbeard")
     data = json.loads(path.read_text(encoding="utf-8"))
     del data["names"]
+    del data["parts"]
     path.write_text(json.dumps(data), encoding="utf-8")
 
-    assert store.load("Blackbeard").names is None
+    article = store.load("Blackbeard")
+    assert article.names is None
+    assert article.parts is None
+
+
+def test_tables_and_captions_round_trip(store: ArticleStore) -> None:
+    parts = (Part("Facts", "Born: c. 1680"), Part("Death > Images", "His severed head"))
+    article = make_article(parts=parts)
+    store.save("Blackbeard", article)
+    assert store.load("Blackbeard") == article
 
 
 def test_contains_reflects_saved_titles(store: ArticleStore) -> None:
