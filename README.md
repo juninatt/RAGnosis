@@ -21,11 +21,13 @@ answered in Swedish.*
 
 ## How it works
 
-1. **Ingest:** fetch articles from Wikipedia and store them locally.
-2. **Index:** split articles into passages, embed each passage and store the
-   vectors in a local index.
+1. **Ingest:** fetch articles from Wikipedia, and their other names from
+   Wikidata, and store them locally.
+2. **Index:** split articles into passages, embed each passage with its
+   article's names and store the vectors in a local index.
 3. **Ask:** embed the question, retrieve the closest passages and let the
-   language model answer from them.
+   language model answer from them. A question that uses another name, such
+   as "Svartskägg" for Blackbeard, finds the article by it.
 
 The reasons behind the stack are in [docs/decisions](docs/decisions).
 
@@ -109,8 +111,10 @@ uv run python -m ragnosis ingest
 the unsigned `ragnosis.exe` launcher; `python -m` works everywhere.
 
 Downloads every title in the topics file (`RAGNOSIS_TOPICS_FILE`) from
-Wikipedia and stores each article as JSON in `data/articles/`. Reruns only
-fetch titles that are missing, so an interrupted run can simply be restarted.
+Wikipedia and stores each article as JSON in `data/articles/`, with its other
+names from Wikidata in the languages of `RAGNOSIS_NAME_LANGUAGES`. Reruns only
+fetch titles that are missing, and names for articles that have none, so an
+interrupted run can simply be restarted.
 
 | Option | Effect |
 |---|---|
@@ -130,7 +134,9 @@ uv run python -m ragnosis index
 Splits the downloaded articles into passages and embeds them with the model in
 `RAGNOSIS_EMBEDDING_MODEL` (downloaded on first use, about 0.5 GB). Reruns only
 embed articles that changed. `--rebuild` starts over, which is required after
-changing the model. Exit code `1` means some titles have not been downloaded.
+changing the model and after upgrading from an index built by an older
+version (the command says so). Exit code `1` means some titles have not been
+downloaded.
 On Windows, the PyTorch library behind the model needs a current
 [Visual C++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist).
 
