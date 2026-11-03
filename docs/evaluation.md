@@ -9,6 +9,50 @@ results here, newest first.
 Times depend on the machine and what else runs on it; compare them only within
 one table.
 
+## 2026-11-02/03: other names from Wikidata (1.2.0)
+
+Same setup as below, rewriting `always`, short answers, minimum score 0.83.
+Three cases were added that ask by another name than the title, and the level
+of 85 % became 21 of 24
+([decision 0011](decisions/0011-other-names-from-wikidata.md)).
+
+| | Passed | Median per answer | Total |
+|---|---|---|---|
+| Names in the index, both searches merged by score | 21 / 24 | 35 s | 12.7 min |
+| **With the four fixes below** | **23 / 24** | 37 s | 13.3 min |
+
+| Case | Should | Best score | By score | Fixed |
+|---|---|---|---|---|
+| svartskagg-death-sv | answer | 0.861 | ✗ | ✓ |
+| black-bart-en | answer | 0.894 | ✗ | ✓ |
+| jolly-roger-sv | answer | 0.917 | ✗ | ✓ |
+| salamis-en | answer | 0.905 | ✓ | ✗ |
+| calico-jack-en | answer | 0.923 | ✓ | ✓ |
+| kapten-kidd-sv | answer | 0.874 | ✓ | ✓ |
+| 14 other cases | answer | 0.857–0.924 | ✓ | ✓ |
+| 4 cases outside the topics | decline | 0.769–0.812 | ✓ | ✓ |
+
+- With the names only in the index, two rewrites still went wrong:
+  "Svartskägg" became the Black Death and "Black Bart" a robber gang leader, and
+  their passages scored higher than the right ones the question found.
+  Without a source naming Svartskägg, the model also called him "Cleitus the
+  Black".
+- jolly-roger-sv was a correct Swedish answer that the language check read as
+  English: "Death's Head" and "Pirates of the Caribbean" gave two English
+  markers against one Swedish.
+- The fixes, one commit each: known names get their article's title before
+  the rewrite, the two searches are merged by place, the model sees the names
+  with each source, and the language check knows "finns" and "ett".
+- salamis-en: merged by place, the passage from the article on triremes no
+  longer made the four. The answer says the sources do not name the type of
+  ship, then that the Greek fleet had triremes, overlooking a sentence that
+  says the Athenian fleet had them. A table of ships per city is missing from
+  the passage, as Wikipedia's text extracts leave tables out.
+- The margin of the minimum score grew: 0.857 against 0.812, from 0.845
+  against 0.811.
+- A third run, after a genitive s was limited to names with a capital letter,
+  gave the same verdicts; its times are not usable, as the computer slept.
+
 ## 2026-11-01: answers that refuse and then answer (after 1.1.0)
 
 In 1.0, female-pirates-en said it could not answer and then named Anne Bonny
