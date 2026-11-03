@@ -6,6 +6,52 @@ Notable changes per release. The format follows
 is set by [decision 0009](docs/decisions/0009-what-1-0-promises.md); before
 it, commands, settings and the index format changed between minor versions.
 
+## [1.2.0] - 2026-11-03
+
+Questions that use another name, such as "Svartskägg" for Blackbeard, find
+the article.
+
+### Added
+
+- `ingest` fetches each article's other names from Wikidata, such as
+  translations, nicknames and full names, and fills them in for articles
+  already stored. Decision 0011 explains how they are used.
+- `RAGNOSIS_NAME_LANGUAGES` (default `en,sv`): the languages of those names.
+- Known names in a question are followed by their article's title before the
+  search, and the model sees the names with each source.
+- `evaluate` fails an answer that says it cannot answer and then answers with
+  sources, unless the case is marked `partial`: the sources answer only part
+  of it, and refusing with context is right.
+- Three known questions that use other names, and two the sources only
+  partly answer.
+
+### Changed
+
+- The index stores the names with every passage (index format 2). An index
+  built by an older version is refused until `index --rebuild` has run; run
+  `ingest` first to fetch the names.
+- Search uses both the question and the rewritten query, merged by place, so
+  a wrong rewrite cannot push out the passages the question finds.
+
+### Fixed
+
+- "Hur dog Svartskägg?" is answered from the article on Blackbeard instead of
+  passages about the Black Death and Rome.
+- The scorecard no longer reads Swedish answers that quote English titles as
+  English.
+- A known question cited a title that Wikipedia redirects; cases now use the
+  titles the redirects lead to, and a test rejects redirected ones.
+
+### Known issues
+
+- Names Wikidata does not have, and inflected forms such as "Svartskäggen",
+  are not recognised.
+- Wikipedia's text extracts leave out tables, so facts that are only in a
+  table cannot be found.
+- Swedish answers have small language errors, such as "osmanlig" for
+  "osmansk".
+- An answer takes 30 to 60 seconds on a laptop CPU.
+
 ## [1.1.0] - 2026-11-01
 
 Questions outside the topics are declined without unrelated sources.

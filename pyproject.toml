@@ -1,6 +1,6 @@
 [project]
 name = "ragnosis"
-version = "1.1.0"
+version = "1.2.0"
 description = "A free, local RAG assistant grounded in Wikipedia."
 readme = "README.md"
 requires-python = ">=3.12"
