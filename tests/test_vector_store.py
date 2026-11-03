@@ -190,11 +190,11 @@ def test_round_trip_keeps_other_names(tmp_path: Path) -> None:
     loaded = VectorStore.load(tmp_path)
 
     assert loaded.search(unit(1, 0))[0].chunk == chunk
-    assert loaded.names_of(1) == ("Svartskägg", "Edward Teach")
+    assert loaded.chunks_of(1) == [chunk]
 
 
-def test_names_of_an_article_not_indexed_are_empty(store: VectorStore) -> None:
-    assert store.names_of(99) == ()
+def test_chunks_of_an_article_not_indexed_are_empty(store: VectorStore) -> None:
+    assert store.chunks_of(99) == []
 
 
 def test_titles_by_name_lists_each_article_once() -> None:

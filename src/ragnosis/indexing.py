@@ -1,8 +1,10 @@
 """Bring the vector index in line with the stored articles.
 
-Only articles whose revision or other names changed since they were indexed
-are embedded again, since embedding is the slow part. Articles that left the title list are
-removed, so the index always matches the list.
+Only articles whose revision or passages changed since they were indexed are
+embedded again, since embedding is the slow part. Comparing the passages
+catches every change to what is embedded, such as new other names or tables
+(0012). Articles that left the title list are removed, so the index always
+matches the list.
 """
 
 from __future__ import annotations
@@ -66,16 +68,15 @@ def update_index(
 
         article = articles.load(title)
         listed_page_ids.add(article.page_id)
-        names = article.names or ()
+        chunks = chunk_article(article)
         if (
             store.revision_of(article.page_id) == article.revision_id
-            and store.names_of(article.page_id) == names
+            and store.chunks_of(article.page_id) == chunks
         ):
-            logger.debug("Skipping %r: already indexed at this revision", title)
+            logger.debug("Skipping %r: already indexed as it is", title)
             report.unchanged.append(title)
             continue
 
-        chunks = chunk_article(article)
         vectors = embedder.embed_documents([chunk.embedding_text for chunk in chunks])
         store.replace_article(article.page_id, article.revision_id, chunks, vectors)
         logger.info("Indexed %r (%d chunks)", article.title, len(chunks))

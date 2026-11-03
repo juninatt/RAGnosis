@@ -10,6 +10,7 @@ from factories import FakeEmbedder, make_article
 
 from ragnosis.article_store import ArticleStore
 from ragnosis.indexing import IndexReport, update_index
+from ragnosis.parts import Part
 from ragnosis.vector_store import VectorStore
 
 BLACKBEARD = make_article(
@@ -110,7 +111,19 @@ def test_changed_names_are_embedded_again_at_the_same_revision(
     report = update_index(["Blackbeard"], articles, store, embedder)
 
     assert report.indexed == ["Blackbeard"]
-    assert store.names_of(1) == ("Svartskägg",)
+    assert store.chunks_of(1)[0].names == ("Svartskägg",)
+
+
+def test_new_tables_are_embedded_at_the_same_revision(
+    articles: ArticleStore, store: VectorStore, embedder: FakeEmbedder
+) -> None:
+    update_index(["Blackbeard"], articles, store, embedder)
+    articles.save("Blackbeard", replace(BLACKBEARD, parts=(Part("Facts", "Born: c. 1680"),)))
+
+    report = update_index(["Blackbeard"], articles, store, embedder)
+
+    assert report.indexed == ["Blackbeard"]
+    assert [chunk.section for chunk in store.chunks_of(1)] == ["Introduction", "Death", "Facts"]
 
 
 def test_new_revision_is_reindexed_in_place(

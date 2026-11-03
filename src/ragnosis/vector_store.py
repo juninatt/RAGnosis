@@ -70,9 +70,9 @@ class VectorStore:
         """The article revision that was indexed, or None if the article is not indexed."""
         return self._revisions.get(page_id)
 
-    def names_of(self, page_id: int) -> tuple[str, ...]:
-        """The other names the article's chunks were embedded with."""
-        return next((chunk.names for chunk in self._chunks if chunk.page_id == page_id), ())
+    def chunks_of(self, page_id: int) -> list[Chunk]:
+        """The article's indexed chunks, in order; empty if it is not indexed."""
+        return [chunk for chunk in self._chunks if chunk.page_id == page_id]
 
     def titles_by_name(self) -> dict[str, list[str]]:
         """Each other name in the index, with the titles of the articles that have it."""
