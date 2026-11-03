@@ -9,20 +9,22 @@ docs/decisions/0004):
 - pack whole paragraphs, and only break a paragraph (at sentences, or at words
   as a last resort) when it is too long on its own,
 - let neighbouring chunks overlap a little, so a fact on a boundary survives,
-- drop sections that only list sources and links.
+- drop sections that only list sources and links,
+- add the article's tables, infobox and image captions as sections of their
+  own after the text, so the text's chunk ids do not change (0012).
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
+from ragnosis.parts import INTRODUCTION, SECTION_SEPARATOR
 from ragnosis.wikipedia import Article
 
 DEFAULT_MAX_WORDS = 200
 DEFAULT_OVERLAP_WORDS = 40
-INTRODUCTION = "Introduction"
-SECTION_SEPARATOR = " > "
 
 # Sections that list sources or links. Their text is noise for retrieval, and
 # so is everything nested under them (e.g. "References > Citations").
@@ -113,9 +115,23 @@ def split_sections(text: str) -> list[Section]:
             headings.pop()
         headings.append((level, title))
         path = SECTION_SEPARATOR.join(name for _, name in headings)
-        skipped = any(name.lower() in SKIPPED_SECTIONS for _, name in headings)
+        skipped = _is_skipped(name for _, name in headings)
     flush()
     return sections
+
+
+def article_sections(article: Article) -> list[Section]:
+    """The sections of the text, then the article's parts outside skipped sections."""
+    parts = [
+        Section(part.path, part.text)
+        for part in article.parts or ()
+        if not _is_skipped(part.path.split(SECTION_SEPARATOR))
+    ]
+    return split_sections(article.text) + parts
+
+
+def _is_skipped(path: Iterable[str]) -> bool:
+    return any(name.lower() in SKIPPED_SECTIONS for name in path)
 
 
 def chunk_article(
@@ -136,7 +152,7 @@ def chunk_article(
         raise ValueError("overlap_words must be at least 0 and less than max_words")
 
     chunks: list[Chunk] = []
-    for section in split_sections(article.text):
+    for section in article_sections(article):
         pieces = [
             piece
             for paragraph in _paragraphs(section.text)

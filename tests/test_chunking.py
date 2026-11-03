@@ -13,13 +13,13 @@ from hypothesis import strategies as st
 
 from ragnosis.chunking import (
     DEFAULT_MAX_WORDS,
-    INTRODUCTION,
     Chunk,
     Section,
     _pack,
     chunk_article,
     split_sections,
 )
+from ragnosis.parts import INTRODUCTION, Part
 
 
 def words(count: int, prefix: str = "w") -> str:
@@ -206,6 +206,38 @@ def test_embedding_text_lists_the_other_names_after_the_title() -> None:
 def test_articles_without_names_give_chunks_without_names() -> None:
     (chunk,) = chunk_article(make_article(names=None))
     assert chunk.names == ()
+
+
+# --- Tables, infoboxes and captions ---
+
+
+def test_parts_become_chunks_after_the_text() -> None:
+    article = make_article(
+        text="Teach was a pirate.",
+        parts=(
+            Part("Facts", "Born: c. 1680\nDied: 1718"),
+            Part("Death > Images", "His severed head hangs from the bowsprit"),
+        ),
+    )
+    chunks = chunk_article(article)
+    assert [(c.chunk_id, c.section, c.text) for c in chunks] == [
+        ("1-0", INTRODUCTION, "Teach was a pirate."),
+        ("1-1", "Facts", "Born: c. 1680 Died: 1718"),
+        ("1-2", "Death > Images", "His severed head hangs from the bowsprit"),
+    ]
+
+
+def test_parts_in_skipped_sections_are_left_out() -> None:
+    article = make_article(text="Lead.", parts=(Part("References > Table", "Smith 2001."),))
+    assert [c.section for c in chunk_article(article)] == [INTRODUCTION]
+
+
+def test_long_tables_break_between_rows() -> None:
+    rows = "\n".join(f"City: c{i}; Ships: {i}." for i in range(30))
+    article = make_article(text="Lead.", parts=(Part("Table", rows),))
+    table_chunks = [c.text for c in chunk_article(article, max_words=20, overlap_words=0)][1:]
+    assert all(text.startswith("City:") and text.endswith(".") for text in table_chunks)
+    assert len(table_chunks) == 6  # four words a row, five rows a chunk
 
 
 @pytest.mark.parametrize(
