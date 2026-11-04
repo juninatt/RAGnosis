@@ -9,6 +9,27 @@ results here, newest first.
 Times depend on the machine and what else runs on it; compare them only within
 one table.
 
+## 2026-11-04: tables, infoboxes and image captions (1.3.0)
+
+Same setup as below. Two cases were added that only a table answers: the ships
+Athens and Corinth sent to Salamis. The level of 85 % became 23 of 26
+([decision 0012](decisions/0012-tables-infoboxes-and-captions.md)).
+
+| | Passed | Median per answer | Total |
+|---|---|---|---|
+| With tables, infoboxes and captions | **26 / 26** | 43 s | 18.4 min |
+
+- athens-ships-en and corinth-ships-sv passed with 180 and 40 ships, numbers
+  that are only in the table. Their best scores were 0.912 and 0.871.
+- salamis-en passed again, now answering from four passages of the article
+  on the battle: the answer mentions triremes and no longer says it cannot
+  answer.
+- The margin of the minimum score held: the questions to be answered scored
+  at least 0.857, those to be declined at most 0.812.
+- The times cannot be compared with 1.2.0. The computer was busy: the tests
+  and `index` ran about twice as slowly as usual too. A second run was
+  stopped before it finished.
+
 ## 2026-11-02/03: other names from Wikidata (1.2.0)
 
 Same setup as below, rewriting `always`, short answers, minimum score 0.83.
