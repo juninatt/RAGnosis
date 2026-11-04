@@ -21,8 +21,9 @@ answered in Swedish.*
 
 ## How it works
 
-1. **Ingest:** fetch articles from Wikipedia, and their other names from
-   Wikidata, and store them locally.
+1. **Ingest:** fetch articles from Wikipedia, with their tables, infoboxes and
+   image captions, and their other names from Wikidata, and store them
+   locally.
 2. **Index:** split articles into passages, embed each passage with its
    article's names and store the vectors in a local index.
 3. **Ask:** embed the question, retrieve the closest passages and let the
@@ -73,8 +74,8 @@ uv run python -m ragnosis ingest
 uv run python -m ragnosis index
 ```
 
-`ingest` downloads the articles in the topics file from Wikipedia (about a
-minute). `index` splits them into passages and embeds them; the first time it
+`ingest` downloads the articles in the topics file from Wikipedia (one to two
+minutes). `index` splits them into passages and embeds them; the first time it
 also downloads the embedding model (0.5 GB). On a laptop CPU it takes 5 to 15
 minutes, and later runs only redo articles that changed.
 
@@ -111,10 +112,12 @@ uv run python -m ragnosis ingest
 the unsigned `ragnosis.exe` launcher; `python -m` works everywhere.
 
 Downloads every title in the topics file (`RAGNOSIS_TOPICS_FILE`) from
-Wikipedia and stores each article as JSON in `data/articles/`, with its other
-names from Wikidata in the languages of `RAGNOSIS_NAME_LANGUAGES`. Reruns only
-fetch titles that are missing, and names for articles that have none, so an
-interrupted run can simply be restarted.
+Wikipedia and stores each article as JSON in `data/articles/`, with its
+tables, infobox and image captions, and its other names from Wikidata in the
+languages of `RAGNOSIS_NAME_LANGUAGES`. Reruns only fetch titles that are
+missing, and names, tables and captions for articles that have none, so an
+interrupted run can simply be restarted. After upgrading RAGnosis, run
+`ingest` and then `index` to add what the new version stores.
 
 | Option | Effect |
 |---|---|
