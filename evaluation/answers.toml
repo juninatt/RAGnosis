@@ -144,6 +144,22 @@ language = "en"
 sources = ["Trireme", "Battle of Salamis"]
 mentions = ["trireme"]
 
+# Answered only by a table, which the text extracts leave out (decision 0012).
+
+[[case]]
+id = "athens-ships-en"
+question = "How many ships did Athens send to the Battle of Salamis?"
+language = "en"
+sources = ["Battle of Salamis"]
+mentions = ["180"]
+
+[[case]]
+id = "corinth-ships-sv"
+question = "Hur många skepp skickade Korinth till slaget vid Salamis?"
+language = "sv"
+sources = ["Battle of Salamis"]
+mentions = ["40", "fyrtio"]
+
 [[case]]
 id = "western-rome-sv"
 question = "När föll det västromerska riket?"

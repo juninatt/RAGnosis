@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from ragnosis.embeddings import SentenceTransformerEmbedder
-from ragnosis.vector_store import VectorStore
+from ragnosis.vector_store import SearchResult, VectorStore
 
 pytestmark = pytest.mark.integration
 
@@ -45,23 +45,38 @@ CASES = [
 ]
 
 
+# Questions only a table answers, which the text extracts leave out (0012),
+# and the section the table is in.
+TABLE_CASES = [
+    ("How many ships did Athens send to the Battle of Salamis?", "Greek fleet > Table"),
+    ("Hur många skepp skickade Korinth till slaget vid Salamis?", "Greek fleet > Table"),
+]
+
+
 @pytest.fixture(scope="module")
-def search() -> Callable[[str], list[str]]:
+def search() -> Callable[[str], list[SearchResult]]:
     if not VectorStore.exists(INDEX_DIR):
         pytest.skip("No local index; run `python -m ragnosis index` first")
     store = VectorStore.load(INDEX_DIR)
     embedder = SentenceTransformerEmbedder(store.embedding_model)
 
-    def top_titles(question: str) -> list[str]:
-        results = store.search(embedder.embed_query(question), k=TOP_K)
-        return [result.chunk.article_title for result in results]
+    def top(question: str) -> list[SearchResult]:
+        return store.search(embedder.embed_query(question), k=TOP_K)
 
-    return top_titles
+    return top
 
 
 @pytest.mark.parametrize(("question", "expected"), CASES)
 def test_question_finds_a_relevant_article(
-    search: Callable[[str], list[str]], question: str, expected: set[str]
+    search: Callable[[str], list[SearchResult]], question: str, expected: set[str]
 ) -> None:
-    titles = search(question)
+    titles = [result.chunk.article_title for result in search(question)]
     assert expected & set(titles), f"Top {TOP_K} for {question!r}: {titles}"
+
+
+@pytest.mark.parametrize(("question", "section"), TABLE_CASES)
+def test_question_finds_the_table(
+    search: Callable[[str], list[SearchResult]], question: str, section: str
+) -> None:
+    sections = [result.chunk.section for result in search(question)]
+    assert any(s.endswith(section) for s in sections), f"Top {TOP_K}: {sections}"
