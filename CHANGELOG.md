@@ -6,6 +6,33 @@ Notable changes per release. The format follows
 is set by [decision 0009](docs/decisions/0009-what-1-0-promises.md); before
 it, commands, settings and the index format changed between minor versions.
 
+## [1.3.0] - 2026-11-05
+
+Facts that are only in a table, an infobox or an image caption can be found.
+
+### Added
+
+- `ingest` fetches each article's tables, infobox and image captions from the
+  same revision as its text, and fills them in for articles already stored.
+  They become passages of their own, such as `Opposing forces > Greek fleet >
+  Table`. Decision 0012 explains how.
+- Two known questions that only a table answers.
+
+### Changed
+
+- `index` embeds an article again whenever its passages change, not only
+  when its revision or other names do. After upgrading, run `ingest` and then
+  `index`; the index format is unchanged, so no rebuild is needed.
+- BeautifulSoup is a new dependency, for reading the HTML.
+
+### Known issues
+
+- A table whose first row is not all headings loses its column headings.
+- Names Wikidata does not have, and inflected forms such as "Svartskäggen",
+  are not recognised.
+- Swedish answers have small language errors, such as "løytnant".
+- An answer takes 30 to 60 seconds on a laptop CPU.
+
 ## [1.2.0] - 2026-11-03
 
 Questions that use another name, such as "Svartskägg" for Blackbeard, find
